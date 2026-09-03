@@ -88,6 +88,25 @@ RSpec.describe 'bin/route' do
     end
   end
 
+  it 'выбирает эталонных провайдеров без fallback и пишет причины пропусков op_103' do
+    Dir.mktmpdir do |tmp|
+      run_route(queue_path, '--out-dir', tmp)
+      decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
+      selected = decisions.to_h do |decision|
+        [decision['operation_id'], decision['selected_provider']]
+      end
+      reference_decision = decisions.find { |decision| decision['operation_id'] == 'op_103' }
+
+      expect(selected).to include('op_103' => 'quickpay', 'op_104' => 'quickpay',
+                                  'op_107' => 'payflow', 'op_108' => 'quickpay')
+      expect(selected.values).not_to include('spacepayments')
+      expect(reference_decision['attempts']).to include(
+        include('provider' => 'vipay', 'decision' => 'skipped'),
+        include('provider' => 'payflow', 'decision' => 'skipped')
+      )
+    end
+  end
+
   it 'без аргументов завершается с ненулевым кодом и сообщением на STDERR' do
     _stdout, stderr, status = run_route
 
