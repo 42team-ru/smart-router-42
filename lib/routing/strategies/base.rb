@@ -11,6 +11,14 @@ module Routing
       def rank(candidates, operation, state)
         raise NotImplementedError, "#{self.class}#rank"
       end
+
+      def name
+        raise NotImplementedError, "#{self.class}#name"
+      end
+
+      def explain(ranked, operation, state)
+        raise NotImplementedError, "#{self.class}#explain"
+      end
     end
   end
 end

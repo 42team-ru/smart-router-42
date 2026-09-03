@@ -1,0 +1,24 @@
+{
+  "period": "2026-07-30",
+  "total_operations": 10,
+  "strategy": "count_share",
+  "distribution": {},
+  "volume_distribution": {},
+  "attempt_distribution": {},
+  "skip_reasons": {},
+  "projected_daily_utilization": {},
+  "fallback": {
+    "first_attempt_success": 0,
+    "recovered_by_fallback": 0,
+    "fallback_rate_pct": 0.0,
+    "spacepayments_used": 0,
+    "cascade_exhausted": 0
+  },
+  "benchmark": {
+    "offline_optimum_deviation_pp": null,
+    "ours_deviation_pp": null,
+    "competitive_ratio": null
+  },
+  "deviation_causes": [],
+  "recommendations": []
+}

@@ -1,29 +1,29 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Единственная точка входа пайплайна умного роутинга.
-#
-# Использование:
-#   bin/route <queue.json> [--out-dir DIR]
-#
-# Ф0: сквозной каркас без содержательного роутинга. Читает очередь операций,
-# пишет два файла с посимвольно точными именами, требуемыми организаторами.
-# Настоящий выбор провайдера появится в Ф1 (RoutePlan + Executor).
-
 require 'json'
 require 'optparse'
 require 'fileutils'
-require_relative '../lib/domain/provider'
-require_relative '../lib/domain/operation'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require_relative '../lib/io/providers_loader'
+require_relative '../lib/io/queue_loader'
 require_relative '../lib/routing/planner'
-require_relative '../lib/routing/attempt'
-require_relative '../lib/routing/reasons'
+require_relative '../lib/routing/share_ledger'
+require_relative '../lib/routing/strategies/volume_share'
+require_relative '../lib/state/providers'
+require_relative '../lib/execution/executor'
+require_relative '../lib/execution/outcome_source/always_ok'
+require_relative '../lib/execution/outcome_source/deterministic'
+require_relative '../lib/reporting/decisions_writer'
+
+# CLI собирает совместимые компоненты в одном месте; дробление делает поток нечитаемым.
+# rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Layout/LineLength
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
 
 def usage
-  'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH]'
+  'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--strategy NAME] [--outcomes NAME] [--seed SEED]'
 end
 
 def fail_with(message)
@@ -37,185 +37,115 @@ def build_option_parser(options)
     opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
       options[:out_dir] = dir
     end
-    opts.on('--providers PATH', 'Снапшот провайдеров') do |path|
-      options[:providers_path] = path
+    opts.on('--providers PATH', 'Снапшот провайдеров') { |path| options[:providers_path] = path }
+    opts.on('--strategy NAME', 'Стратегия ранжирования (count_share)') do |name|
+      options[:strategy] = name
     end
+    opts.on('--outcomes NAME', 'Источник исходов: deterministic или always_ok') do |name|
+      options[:outcomes] = name
+    end
+    opts.on('--seed SEED', 'Seed детерминированного источника') { |seed| options[:seed] = seed }
   end
 end
 
 def parse_args(argv)
-  options = { out_dir: 'out', providers_path: 'reference/data/providers.json' }
+  options = { out_dir: 'out', providers_path: 'reference/data/providers.json', strategy: 'count_share',
+              outcomes: 'deterministic', seed: '42' }
   parser = build_option_parser(options)
-
-  begin
-    remaining = parser.parse(argv)
-  rescue OptionParser::ParseError => e
-    fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
-  end
-
+  remaining = parser.parse(argv)
   fail_with("Не указан файл очереди.\n#{usage}") if remaining.empty?
 
   options[:queue_path] = remaining.first
   options
+rescue OptionParser::ParseError => e
+  fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
 end
 
-def load_queue(path)
-  fail_with("Файл очереди не найден: #{path}") unless File.exist?(path)
-
-  begin
-    JSON.parse(File.read(path))
-  rescue JSON::ParserError => e
-    fail_with("Битый JSON в файле очереди #{path}: #{e.message}")
-  end
-end
-
-# TODO(IO-1): заменить на загрузчик из lib/io.
-def load_providers(path)
-  fail_with("Файл провайдеров не найден: #{path}") unless File.exist?(path)
-
-  snapshots = JSON.parse(File.read(path)).fetch('providers')
-  snapshots.map do |snapshot|
-    attributes = snapshot.transform_keys(&:to_sym)
-    provider_attributes = Domain::Provider.members.to_h { |field| [field, attributes[field]] }
-
-    Domain::Provider.new(**provider_attributes)
-  end
-end
-
-def build_operation(snapshot)
-  Domain::Operation.new(**snapshot.transform_keys(&:to_sym))
-end
-
-# rubocop:disable-next Metrics/MethodLength -- три зафиксированные ветки выбранного attempt.
-def selected_attempt(provider, plan, external_count)
-  if plan.empty?
-    reason = Routing::Reasons::SELECTED.fetch(4)
-    details = "допустимых внешних провайдеров 0 из #{external_count}"
-  elsif plan.candidates.one?
-    reason = Routing::Reasons::SELECTED.fetch(0)
-    details = "допустимых провайдеров 1 из #{external_count}"
+def outcome_source(options, providers)
+  case options[:outcomes]
+  when 'always_ok' then Execution::OutcomeSource::AlwaysOk.new
+  when 'deterministic'
+    conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
+    Execution::OutcomeSource::Deterministic.new(seed: options[:seed], conversions: conversions)
   else
-    reason = Routing::Reasons::SELECTED.fetch(1)
-    details = "допустимых провайдеров #{plan.candidates.size} из #{external_count}, " \
-              "первый по priority #{provider.priority}"
+    fail_with("Неизвестный источник исходов #{options[:outcomes].inspect}; допустимы deterministic, always_ok")
   end
-
-  Routing::Attempt.new(
-    provider: provider.name, decision: 'selected', reason: reason, details: details
-  ).to_h
 end
 
-# rubocop:disable-next Metrics/MethodLength -- строит одну запись решения в зафиксированном формате.
-def build_decision(snapshot, planner, external_count)
-  operation = build_operation(snapshot)
-  plan = planner.plan(operation)
-  provider = plan.candidates.first || planner.fallback_provider_object
-  attempts = plan.skipped.map { |item, violation| violation.to_attempt(item.name).to_h }
-  attempts << selected_attempt(provider, plan, external_count)
+def settle_share(ledger, outcome, operation)
+  ledger.reserve(outcome.selected, operation)
+  case outcome.result
+  when :approved then ledger.commit(outcome.selected, operation)
+  when :expired then ledger.hold(outcome.selected, operation)
+  when :rejected then ledger.rollback(outcome.selected, operation)
+  end
+end
 
-  {
-    'operation_id' => operation.operation_id,
-    'selected_provider' => provider.name,
-    'attempts' => attempts,
-    'simulated_result' => 'approved',
-    'latency_sec' => provider.avg_latency_sec
-  }
+def explain_first_attempt(outcome, plan, operation, strategy, ledger)
+  attempts = outcome.attempts.map do |attempt|
+    first_ranked = attempt.decision == 'selected' && attempt.attempt_no == 1 && plan.candidates.size > 1
+    Routing::Attempt.new(
+      provider: attempt.provider.respond_to?(:name) ? attempt.provider.name : attempt.provider,
+      decision: attempt.decision,
+      reason: first_ranked ? 'best_target_adherence' : attempt.reason,
+      details: first_ranked ? strategy.explain(plan.candidates, operation, ledger) : attempt.details,
+      strategy: first_ranked ? strategy.name : attempt.strategy,
+      attempt_no: attempt.attempt_no, result: attempt.result
+    )
+  end
+  Execution::Outcome.new(selected: outcome.selected, attempts: attempts, result: outcome.result)
 end
 
 def report_period(queue)
   return nil if queue.empty?
 
-  queue.first.fetch('created_at')[0, 10]
+  queue.first.created_at[0, 10]
 end
 
-def report_distribution(total)
+def build_report(queue, strategy_name)
   {
-    'spacepayments' => {
-      'count' => total,
-      'share_pct' => 100.0,
-      'target_pct' => 0,
-      'achievable_pct' => 0.0,
-      'deviation_pp' => 0.0
-    }
-  }
-end
-
-def report_fallback
-  {
-    'first_attempt_success' => 0,
-    'recovered_by_fallback' => 0,
-    'fallback_rate_pct' => 0.0,
-    'spacepayments_used' => 0,
-    'cascade_exhausted' => 0
-  }
-end
-
-def report_benchmark
-  {
-    'offline_optimum_deviation_pp' => nil,
-    'ours_deviation_pp' => nil,
-    'competitive_ratio' => nil
-  }
-end
-
-def report_header(queue)
-  {
-    'period' => report_period(queue),
-    'total_operations' => queue.size,
-    'strategy' => nil,
-    'distribution' => report_distribution(queue.size)
-  }
-end
-
-def report_tail
-  {
-    'volume_distribution' => {},
-    'attempt_distribution' => {},
-    'skip_reasons' => {},
+    'period' => report_period(queue), 'total_operations' => queue.size, 'strategy' => strategy_name,
+    'distribution' => {}, 'volume_distribution' => {}, 'attempt_distribution' => {}, 'skip_reasons' => {},
     'projected_daily_utilization' => {},
-    'fallback' => report_fallback,
-    'benchmark' => report_benchmark,
-    'deviation_causes' => [],
-    'recommendations' => []
+    'fallback' => { 'first_attempt_success' => 0, 'recovered_by_fallback' => 0, 'fallback_rate_pct' => 0.0,
+                    'spacepayments_used' => 0, 'cascade_exhausted' => 0 },
+    'benchmark' => { 'offline_optimum_deviation_pp' => nil, 'ours_deviation_pp' => nil, 'competitive_ratio' => nil },
+    'deviation_causes' => [], 'recommendations' => []
   }
-end
-
-def build_report(queue)
-  report_header(queue).merge(report_tail)
 end
 
 def write_json(path, data)
   File.write(path, "#{JSON.pretty_generate(data)}\n")
 end
 
-def write_outputs(out_dir, decisions, report)
-  decisions_path = File.join(out_dir, DECISIONS_FILENAME)
-  report_path = File.join(out_dir, REPORT_FILENAME)
-
-  write_json(decisions_path, decisions)
-  write_json(report_path, report)
-
-  [decisions_path, report_path]
-end
-
-# rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength -- последовательность CLI-пайплайна.
 def main(argv)
   options = parse_args(argv)
-  queue = load_queue(options[:queue_path])
-  providers = load_providers(options[:providers_path])
-  planner = Routing::Planner.new(providers: providers)
-  external_count = providers.count { |provider| provider.name != 'spacepayments' }
+  providers = Io::ProvidersLoader.load(options[:providers_path])
+  queue_result = Io::QueueLoader.load(options[:queue_path])
+  strategy = Routing::Strategies.build(options[:strategy])
+  planner = Routing::Planner.new(providers: providers, strategy: strategy)
+  state = State::Providers.new(providers)
+  ledger = Routing::ShareLedger.new
+  executor = Execution::Executor.new(outcomes: outcome_source(options, providers))
+
+  decisions = queue_result.operations.map do |operation|
+    plan = planner.plan(operation, ledger)
+    outcome = executor.run(plan, operation, state)
+    explained = explain_first_attempt(outcome, plan, operation, strategy, ledger)
+    settle_share(ledger, explained, operation)
+    Reporting::DecisionsWriter.build_decision(operation, explained)
+  end
 
   FileUtils.mkdir_p(options[:out_dir])
-
-  decisions = queue.map { |operation| build_decision(operation, planner, external_count) }
-  report = build_report(queue)
-
-  decisions_path, report_path = write_outputs(options[:out_dir], decisions, report)
-
-  puts "Прочитано операций: #{queue.size}"
+  decisions_path = File.join(options[:out_dir], DECISIONS_FILENAME)
+  report_path = File.join(options[:out_dir], REPORT_FILENAME)
+  write_json(decisions_path, decisions)
+  write_json(report_path, build_report(queue_result.operations, strategy.name))
+  puts "Прочитано операций: #{queue_result.operations.size}"
   puts "Записано: #{decisions_path}"
   puts "Записано: #{report_path}"
 end
 
 main(ARGV) if $PROGRAM_NAME == __FILE__
+
+# rubocop:enable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Layout/LineLength
