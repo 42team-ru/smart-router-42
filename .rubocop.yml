@@ -1,8 +1,9 @@
-require:
+plugins:
   - rubocop-rspec
 
 AllCops:
   NewCops: enable
+  SuggestExtensions: false
   TargetRubyVersion: 3.3
   Include:
     - "bin/*"
