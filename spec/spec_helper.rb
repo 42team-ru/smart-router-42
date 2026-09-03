@@ -4,6 +4,8 @@ SPEC_ROOT = __dir__
 
 $LOAD_PATH.unshift(File.join(SPEC_ROOT, '..', 'lib'))
 
+Dir[File.join(SPEC_ROOT, 'support', '**', '*.rb')].each { |f| require f }
+
 RSpec.configure do |config|
   config.disable_monkey_patching!
 

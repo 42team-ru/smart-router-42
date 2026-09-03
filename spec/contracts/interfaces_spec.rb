@@ -124,10 +124,6 @@ RSpec.describe 'семь замороженных интерфейсов' do
         [%i[req plan], %i[req operation], %i[req state]]
       )
     end
-
-    it 'заглушка поднимает NotImplementedError' do
-      expect { described_class.new.run(nil, nil, nil) }.to raise_error(NotImplementedError)
-    end
   end
 
   describe 'State::Providers (интерфейс 6: State::Providers)' do
@@ -142,11 +138,6 @@ RSpec.describe 'семь замороженных интерфейсов' do
         expect(described_class.instance_method(method_name).parameters).to eq(
           [%i[req provider], %i[req operation]]
         )
-      end
-
-      it "заглушка ##{method_name} поднимает NotImplementedError" do
-        expect { described_class.new.public_send(method_name, nil, nil) }
-          .to raise_error(NotImplementedError)
       end
     end
   end

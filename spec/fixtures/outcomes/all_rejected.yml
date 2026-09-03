@@ -1,0 +1,7 @@
+# Сценарий каскада: все три реальных провайдера отказали. selected_provider
+# должен стать последним реальным (quickpay), НЕ spacepayments — fallback
+# по допуску, а не по исходу (§7 ARCH).
+op_1:
+  vipay: :rejected
+  payflow: :rejected
+  quickpay: :rejected
