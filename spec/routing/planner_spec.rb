@@ -2,6 +2,7 @@
 
 require 'json'
 require 'routing/planner'
+require 'routing/share_ledger'
 require_relative '../support/provider_factory'
 
 # rubocop:disable-next RSpec/MultipleExpectations, RSpec/ExampleLength
@@ -54,8 +55,12 @@ RSpec.describe Routing::Planner do
                                            fallback]).fallback_provider_object).to eq(fallback)
   end
 
-  it 'сортирует кандидатов op_101 по priority' do
-    expect(public_plan('op_101').candidates.map(&:name)).to eq(%w[vipay payflow quickpay])
+  it 'ранжирует кандидатов op_101 CountShare на пустом леджере' do
+    ledger = Routing::ShareLedger.new
+
+    expect(planner.plan(operations.first, ledger).candidates.map(&:name)).to eq(
+      %w[vipay payflow quickpay]
+    )
   end
 
   it 'разрешает равный priority именем независимо от порядка входа' do
