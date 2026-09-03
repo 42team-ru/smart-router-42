@@ -13,12 +13,17 @@
 require 'json'
 require 'optparse'
 require 'fileutils'
+require_relative '../lib/domain/provider'
+require_relative '../lib/domain/operation'
+require_relative '../lib/routing/planner'
+require_relative '../lib/routing/attempt'
+require_relative '../lib/routing/reasons'
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
 
 def usage
-  'Использование: bin/route <queue.json> [--out-dir DIR]'
+  'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH]'
 end
 
 def fail_with(message)
@@ -32,11 +37,14 @@ def build_option_parser(options)
     opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
       options[:out_dir] = dir
     end
+    opts.on('--providers PATH', 'Снапшот провайдеров') do |path|
+      options[:providers_path] = path
+    end
   end
 end
 
 def parse_args(argv)
-  options = { out_dir: 'out' }
+  options = { out_dir: 'out', providers_path: 'reference/data/providers.json' }
   parser = build_option_parser(options)
 
   begin
@@ -61,25 +69,56 @@ def load_queue(path)
   end
 end
 
-# TODO(Ф1/R-11): заменить на настоящий RoutePlan + Executor.
-# Сейчас допуск не реализован: ни один внешний провайдер не проходил проверку,
-# поэтому spacepayments подхватывает каждую операцию как fallback по допуску.
-def fallback_attempt
-  {
-    'provider' => 'spacepayments',
-    'decision' => 'selected',
-    'reason' => 'fallback_no_eligible_provider',
-    'details' => 'допустимых внешних провайдеров 0 из 3'
-  }
+# TODO(IO-1): заменить на загрузчик из lib/io.
+def load_providers(path)
+  fail_with("Файл провайдеров не найден: #{path}") unless File.exist?(path)
+
+  snapshots = JSON.parse(File.read(path)).fetch('providers')
+  snapshots.map do |snapshot|
+    attributes = snapshot.transform_keys(&:to_sym)
+    provider_attributes = Domain::Provider.members.to_h { |field| [field, attributes[field]] }
+
+    Domain::Provider.new(**provider_attributes)
+  end
 end
 
-def build_decision(operation)
+def build_operation(snapshot)
+  Domain::Operation.new(**snapshot.transform_keys(&:to_sym))
+end
+
+# rubocop:disable-next Metrics/MethodLength -- три зафиксированные ветки выбранного attempt.
+def selected_attempt(provider, plan, external_count)
+  if plan.empty?
+    reason = Routing::Reasons::SELECTED.fetch(4)
+    details = "допустимых внешних провайдеров 0 из #{external_count}"
+  elsif plan.candidates.one?
+    reason = Routing::Reasons::SELECTED.fetch(0)
+    details = "допустимых провайдеров 1 из #{external_count}"
+  else
+    reason = Routing::Reasons::SELECTED.fetch(1)
+    details = "допустимых провайдеров #{plan.candidates.size} из #{external_count}, " \
+              "первый по priority #{provider.priority}"
+  end
+
+  Routing::Attempt.new(
+    provider: provider.name, decision: 'selected', reason: reason, details: details
+  ).to_h
+end
+
+# rubocop:disable-next Metrics/MethodLength -- строит одну запись решения в зафиксированном формате.
+def build_decision(snapshot, planner, external_count)
+  operation = build_operation(snapshot)
+  plan = planner.plan(operation)
+  provider = plan.candidates.first || planner.fallback_provider_object
+  attempts = plan.skipped.map { |item, violation| violation.to_attempt(item.name).to_h }
+  attempts << selected_attempt(provider, plan, external_count)
+
   {
-    'operation_id' => operation.fetch('operation_id'),
-    'selected_provider' => 'spacepayments',
-    'attempts' => [fallback_attempt],
+    'operation_id' => operation.operation_id,
+    'selected_provider' => provider.name,
+    'attempts' => attempts,
     'simulated_result' => 'approved',
-    'latency_sec' => 15
+    'latency_sec' => provider.avg_latency_sec
   }
 end
 
@@ -159,13 +198,17 @@ def write_outputs(out_dir, decisions, report)
   [decisions_path, report_path]
 end
 
+# rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength -- последовательность CLI-пайплайна.
 def main(argv)
   options = parse_args(argv)
   queue = load_queue(options[:queue_path])
+  providers = load_providers(options[:providers_path])
+  planner = Routing::Planner.new(providers: providers)
+  external_count = providers.count { |provider| provider.name != 'spacepayments' }
 
   FileUtils.mkdir_p(options[:out_dir])
 
-  decisions = queue.map { |operation| build_decision(operation) }
+  decisions = queue.map { |operation| build_decision(operation, planner, external_count) }
   report = build_report(queue)
 
   decisions_path, report_path = write_outputs(options[:out_dir], decisions, report)
