@@ -14,8 +14,10 @@ RSpec.describe 'bin/route' do
   let(:queue_path) { reference_path('operations_queue_10.json') }
   let(:queue) { JSON.parse(File.read(queue_path)) }
 
+  # Явный интерпретатор вместо прямого запуска bin_route: на Windows нет
+  # ассоциации для shebang-скрипта без расширения, execve падает с ENOEXEC.
   def run_route(*args)
-    Open3.capture3(bin_route, *args)
+    Open3.capture3('ruby', bin_route, *args)
   end
 
   it 'завершается с кодом 0 и пишет оба файла с точными именами' do
