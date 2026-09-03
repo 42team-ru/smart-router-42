@@ -1,0 +1,63 @@
+[
+  {
+    "operation_id": "op_103",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "1 допустимый провайдер из 3",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_106",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "52000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "недобор доли 6.7 п.п. против перебора quickpay 4.2 п.п.",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "rejected"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "next_in_cascade",
+        "details": "vipay отказал на попытке 1, следующий в каскаде по count_share",
+        "strategy": "count_share",
+        "attempt_no": 2,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  }
+]

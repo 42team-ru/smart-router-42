@@ -1,0 +1,26 @@
+require:
+  - rubocop-rspec
+
+AllCops:
+  NewCops: enable
+  TargetRubyVersion: 3.3
+  Include:
+    - "bin/*"
+  inherit_mode:
+    merge:
+      - Include
+  Exclude:
+    - "reference/**/*"
+    - "vendor/**/*"
+    - "out/**/*"
+    - "scripts/**/*"
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+
+Style/Documentation:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 100

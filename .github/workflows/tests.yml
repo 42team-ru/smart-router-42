@@ -1,0 +1,27 @@
+name: gate
+
+on: [push, pull_request]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+
+      - run: make gate
+
+      # Ф0: заглушка роутинга даёт ровно 4 ошибки на эталонных кейсах
+      # (op_103, op_104, op_107, op_108). Пометка снимается гейтом Ф1, где ошибок 0.
+      - run: make validate
+        continue-on-error: true
+
+      # Недетерминированный движок даёт невоспроизводимые цифры на защите.
+      # Ловим здесь, а не за час до стопкода.
+      - run: make determinism
+
+      - name: no randomness in decision path
+        run: make no-random

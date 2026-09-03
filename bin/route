@@ -1,0 +1,178 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Единственная точка входа пайплайна умного роутинга.
+#
+# Использование:
+#   bin/route <queue.json> [--out-dir DIR]
+#
+# Ф0: сквозной каркас без содержательного роутинга. Читает очередь операций,
+# пишет два файла с посимвольно точными именами, требуемыми организаторами.
+# Настоящий выбор провайдера появится в Ф1 (RoutePlan + Executor).
+
+require 'json'
+require 'optparse'
+require 'fileutils'
+
+DECISIONS_FILENAME = 'routing_decisions_test.json'
+REPORT_FILENAME = 'routing_report_test.json'
+
+def usage
+  'Использование: bin/route <queue.json> [--out-dir DIR]'
+end
+
+def fail_with(message)
+  warn message
+  exit 1
+end
+
+def build_option_parser(options)
+  OptionParser.new do |opts|
+    opts.banner = usage
+    opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
+      options[:out_dir] = dir
+    end
+  end
+end
+
+def parse_args(argv)
+  options = { out_dir: 'out' }
+  parser = build_option_parser(options)
+
+  begin
+    remaining = parser.parse(argv)
+  rescue OptionParser::ParseError => e
+    fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
+  end
+
+  fail_with("Не указан файл очереди.\n#{usage}") if remaining.empty?
+
+  options[:queue_path] = remaining.first
+  options
+end
+
+def load_queue(path)
+  fail_with("Файл очереди не найден: #{path}") unless File.exist?(path)
+
+  begin
+    JSON.parse(File.read(path))
+  rescue JSON::ParserError => e
+    fail_with("Битый JSON в файле очереди #{path}: #{e.message}")
+  end
+end
+
+# TODO(Ф1/R-11): заменить на настоящий RoutePlan + Executor.
+# Сейчас допуск не реализован: ни один внешний провайдер не проходил проверку,
+# поэтому spacepayments подхватывает каждую операцию как fallback по допуску.
+def fallback_attempt
+  {
+    'provider' => 'spacepayments',
+    'decision' => 'selected',
+    'reason' => 'fallback_no_eligible_provider',
+    'details' => 'допустимых внешних провайдеров 0 из 3'
+  }
+end
+
+def build_decision(operation)
+  {
+    'operation_id' => operation.fetch('operation_id'),
+    'selected_provider' => 'spacepayments',
+    'attempts' => [fallback_attempt],
+    'simulated_result' => 'approved',
+    'latency_sec' => 15
+  }
+end
+
+def report_period(queue)
+  return nil if queue.empty?
+
+  queue.first.fetch('created_at')[0, 10]
+end
+
+def report_distribution(total)
+  {
+    'spacepayments' => {
+      'count' => total,
+      'share_pct' => 100.0,
+      'target_pct' => 0,
+      'achievable_pct' => 0.0,
+      'deviation_pp' => 0.0
+    }
+  }
+end
+
+def report_fallback
+  {
+    'first_attempt_success' => 0,
+    'recovered_by_fallback' => 0,
+    'fallback_rate_pct' => 0.0,
+    'spacepayments_used' => 0,
+    'cascade_exhausted' => 0
+  }
+end
+
+def report_benchmark
+  {
+    'offline_optimum_deviation_pp' => nil,
+    'ours_deviation_pp' => nil,
+    'competitive_ratio' => nil
+  }
+end
+
+def report_header(queue)
+  {
+    'period' => report_period(queue),
+    'total_operations' => queue.size,
+    'strategy' => nil,
+    'distribution' => report_distribution(queue.size)
+  }
+end
+
+def report_tail
+  {
+    'volume_distribution' => {},
+    'attempt_distribution' => {},
+    'skip_reasons' => {},
+    'projected_daily_utilization' => {},
+    'fallback' => report_fallback,
+    'benchmark' => report_benchmark,
+    'deviation_causes' => [],
+    'recommendations' => []
+  }
+end
+
+def build_report(queue)
+  report_header(queue).merge(report_tail)
+end
+
+def write_json(path, data)
+  File.write(path, "#{JSON.pretty_generate(data)}\n")
+end
+
+def write_outputs(out_dir, decisions, report)
+  decisions_path = File.join(out_dir, DECISIONS_FILENAME)
+  report_path = File.join(out_dir, REPORT_FILENAME)
+
+  write_json(decisions_path, decisions)
+  write_json(report_path, report)
+
+  [decisions_path, report_path]
+end
+
+def main(argv)
+  options = parse_args(argv)
+  queue = load_queue(options[:queue_path])
+
+  FileUtils.mkdir_p(options[:out_dir])
+
+  decisions = queue.map { |operation| build_decision(operation) }
+  report = build_report(queue)
+
+  decisions_path, report_path = write_outputs(options[:out_dir], decisions, report)
+
+  puts "Прочитано операций: #{queue.size}"
+  puts "Записано: #{decisions_path}"
+  puts "Записано: #{report_path}"
+end
+
+main(ARGV) if $PROGRAM_NAME == __FILE__
