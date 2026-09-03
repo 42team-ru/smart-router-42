@@ -4,26 +4,39 @@
 # Единственная точка входа пайплайна умного роутинга.
 #
 # Использование:
-#   bin/route <queue.json> [--out-dir DIR]
+#   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--outcomes always_ok|deterministic]
 #
-# Ф0: сквозной каркас без содержательного роутинга. Читает очередь операций,
-# пишет два файла с посимвольно точными именами, требуемыми организаторами.
-# Настоящий выбор провайдера появится в Ф1 (RoutePlan + Executor).
+# Ф2: настоящий пайплайн — Routing::Planner строит каскад, Execution::Executor
+# исполняет его через State::Providers, Reporting::DecisionsWriter/ReportBuilder
+# пишут оба файла. outcomes: always_ok по умолчанию (совпадает с тем, как
+# провалидированы 4 эталонных кейса организаторов), deterministic — для
+# содержательного прогона approved/rejected/expired на боевой очереди.
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 
 require 'json'
 require 'optparse'
 require 'fileutils'
-require_relative '../lib/domain/provider'
-require_relative '../lib/domain/operation'
+require_relative '../lib/io/providers_loader'
+require_relative '../lib/io/queue_loader'
+require_relative '../lib/io/history_loader'
 require_relative '../lib/routing/planner'
-require_relative '../lib/routing/attempt'
-require_relative '../lib/routing/reasons'
+require_relative '../lib/execution/executor'
+require_relative '../lib/execution/outcome_source/always_ok'
+require_relative '../lib/execution/outcome_source/deterministic'
+require_relative '../lib/state/providers'
+require_relative '../lib/reporting/decisions_writer'
+require_relative '../lib/reporting/report_builder'
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
+HISTORY_PATH = 'reference/data/operations_history.csv'
+# Не seed из времени/окружения — иначе make determinism не совпадёт побайтово.
+DETERMINISTIC_SEED = 'smart-router-42'
 
 def usage
-  'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH]'
+  'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] ' \
+    '[--outcomes always_ok|deterministic]'
 end
 
 def fail_with(message)
@@ -31,20 +44,32 @@ def fail_with(message)
   exit 1
 end
 
-def build_option_parser(options)
-  OptionParser.new do |opts|
-    opts.banner = usage
-    opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
-      options[:out_dir] = dir
-    end
-    opts.on('--providers PATH', 'Снапшот провайдеров') do |path|
-      options[:providers_path] = path
-    end
+def add_options(opts, options)
+  opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
+    options[:out_dir] = dir
+  end
+  opts.on('--providers PATH', 'Снапшот провайдеров') do |path|
+    options[:providers_path] = path
+  end
+  opts.on('--outcomes SOURCE', %w[always_ok deterministic],
+          'Источник исходов исполнения (always_ok по умолчанию)') do |source|
+    options[:outcomes] = source
   end
 end
 
+def build_option_parser(options)
+  OptionParser.new do |opts|
+    opts.banner = usage
+    add_options(opts, options)
+  end
+end
+
+def default_options
+  { out_dir: 'out', providers_path: 'reference/data/providers.json', outcomes: 'always_ok' }
+end
+
 def parse_args(argv)
-  options = { out_dir: 'out', providers_path: 'reference/data/providers.json' }
+  options = default_options
   parser = build_option_parser(options)
 
   begin
@@ -59,161 +84,75 @@ def parse_args(argv)
   options
 end
 
-def load_queue(path)
-  fail_with("Файл очереди не найден: #{path}") unless File.exist?(path)
-
-  begin
-    JSON.parse(File.read(path))
-  rescue JSON::ParserError => e
-    fail_with("Битый JSON в файле очереди #{path}: #{e.message}")
-  end
-end
-
-# TODO(IO-1): заменить на загрузчик из lib/io.
 def load_providers(path)
-  fail_with("Файл провайдеров не найден: #{path}") unless File.exist?(path)
+  Io::ProvidersLoader.load(path)
+rescue RuntimeError => e
+  fail_with(e.message)
+end
 
-  snapshots = JSON.parse(File.read(path)).fetch('providers')
-  snapshots.map do |snapshot|
-    attributes = snapshot.transform_keys(&:to_sym)
-    provider_attributes = Domain::Provider.members.to_h { |field| [field, attributes[field]] }
+def load_queue(path)
+  result = Io::QueueLoader.load(path)
+  result.errors.each { |error| warn "очередь: #{error}" }
+  result.operations
+rescue RuntimeError => e
+  fail_with(e.message)
+end
 
-    Domain::Provider.new(**provider_attributes)
+def build_outcome_source(name, providers)
+  return Execution::OutcomeSource::AlwaysOk.new unless name == 'deterministic'
+
+  conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h] }
+  Execution::OutcomeSource::Deterministic.new(seed: DETERMINISTIC_SEED, conversions: conversions)
+end
+
+# Attempt#provider у настоящего Outcome — объект Domain::Provider (см. Executor/Violation),
+# а JSON-контракт decisions/report ждёт строку-имя. Нормализуем на границе интеграции, не
+# трогая замороженный формат Attempt.
+def normalize_outcome(outcome)
+  attempts = outcome.attempts.map do |attempt|
+    next attempt unless attempt.provider.respond_to?(:name)
+
+    attempt.with(provider: attempt.provider.name)
   end
+  outcome.with(attempts: attempts)
 end
 
-def build_operation(snapshot)
-  Domain::Operation.new(**snapshot.transform_keys(&:to_sym))
+def route_operation(operation, planner, executor, state)
+  plan = planner.plan(operation, state)
+  outcome = executor.run(plan, operation, state)
+  [operation, normalize_outcome(outcome)]
 end
 
-# rubocop:disable-next Metrics/MethodLength -- три зафиксированные ветки выбранного attempt.
-def selected_attempt(provider, plan, external_count)
-  if plan.empty?
-    reason = Routing::Reasons::SELECTED.fetch(4)
-    details = "допустимых внешних провайдеров 0 из #{external_count}"
-  elsif plan.candidates.one?
-    reason = Routing::Reasons::SELECTED.fetch(0)
-    details = "допустимых провайдеров 1 из #{external_count}"
-  else
-    reason = Routing::Reasons::SELECTED.fetch(1)
-    details = "допустимых провайдеров #{plan.candidates.size} из #{external_count}, " \
-              "первый по priority #{provider.priority}"
-  end
+def build_pairs(operations, providers, outcomes_source)
+  planner = Routing::Planner.new(providers: providers)
+  executor = Execution::Executor.new(outcomes: outcomes_source)
+  state = State::Providers.new(providers)
 
-  Routing::Attempt.new(
-    provider: provider.name, decision: 'selected', reason: reason, details: details
-  ).to_h
+  operations.map { |operation| route_operation(operation, planner, executor, state) }
 end
 
-# rubocop:disable-next Metrics/MethodLength -- строит одну запись решения в зафиксированном формате.
-def build_decision(snapshot, planner, external_count)
-  operation = build_operation(snapshot)
-  plan = planner.plan(operation)
-  provider = plan.candidates.first || planner.fallback_provider_object
-  attempts = plan.skipped.map { |item, violation| violation.to_attempt(item.name).to_h }
-  attempts << selected_attempt(provider, plan, external_count)
-
-  {
-    'operation_id' => operation.operation_id,
-    'selected_provider' => provider.name,
-    'attempts' => attempts,
-    'simulated_result' => 'approved',
-    'latency_sec' => provider.avg_latency_sec
-  }
-end
-
-def report_period(queue)
-  return nil if queue.empty?
-
-  queue.first.fetch('created_at')[0, 10]
-end
-
-def report_distribution(total)
-  {
-    'spacepayments' => {
-      'count' => total,
-      'share_pct' => 100.0,
-      'target_pct' => 0,
-      'achievable_pct' => 0.0,
-      'deviation_pp' => 0.0
-    }
-  }
-end
-
-def report_fallback
-  {
-    'first_attempt_success' => 0,
-    'recovered_by_fallback' => 0,
-    'fallback_rate_pct' => 0.0,
-    'spacepayments_used' => 0,
-    'cascade_exhausted' => 0
-  }
-end
-
-def report_benchmark
-  {
-    'offline_optimum_deviation_pp' => nil,
-    'ours_deviation_pp' => nil,
-    'competitive_ratio' => nil
-  }
-end
-
-def report_header(queue)
-  {
-    'period' => report_period(queue),
-    'total_operations' => queue.size,
-    'strategy' => nil,
-    'distribution' => report_distribution(queue.size)
-  }
-end
-
-def report_tail
-  {
-    'volume_distribution' => {},
-    'attempt_distribution' => {},
-    'skip_reasons' => {},
-    'projected_daily_utilization' => {},
-    'fallback' => report_fallback,
-    'benchmark' => report_benchmark,
-    'deviation_causes' => [],
-    'recommendations' => []
-  }
-end
-
-def build_report(queue)
-  report_header(queue).merge(report_tail)
-end
-
-def write_json(path, data)
-  File.write(path, "#{JSON.pretty_generate(data)}\n")
-end
-
-def write_outputs(out_dir, decisions, report)
+def write_outputs(out_dir, pairs, providers, history)
+  FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
 
-  write_json(decisions_path, decisions)
-  write_json(report_path, report)
+  Reporting::DecisionsWriter.write(decisions_path, pairs)
+  Reporting::ReportBuilder.write(report_path, pairs, providers: providers, history: history)
 
   [decisions_path, report_path]
 end
 
-# rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength -- последовательность CLI-пайплайна.
 def main(argv)
   options = parse_args(argv)
-  queue = load_queue(options[:queue_path])
   providers = load_providers(options[:providers_path])
-  planner = Routing::Planner.new(providers: providers)
-  external_count = providers.count { |provider| provider.name != 'spacepayments' }
+  operations = load_queue(options[:queue_path])
+  history = Io::HistoryLoader.load(HISTORY_PATH)
+  outcomes_source = build_outcome_source(options[:outcomes], providers)
 
-  FileUtils.mkdir_p(options[:out_dir])
+  pairs = build_pairs(operations, providers, outcomes_source)
+  decisions_path, report_path = write_outputs(options[:out_dir], pairs, providers, history)
 
-  decisions = queue.map { |operation| build_decision(operation, planner, external_count) }
-  report = build_report(queue)
-
-  decisions_path, report_path = write_outputs(options[:out_dir], decisions, report)
-
-  puts "Прочитано операций: #{queue.size}"
+  puts "Прочитано операций: #{operations.size}"
   puts "Записано: #{decisions_path}"
   puts "Записано: #{report_path}"
 end
