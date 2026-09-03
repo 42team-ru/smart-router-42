@@ -4,13 +4,13 @@
 # Единственная точка входа пайплайна умного роутинга.
 #
 # Использование:
-#   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--outcomes always_ok|deterministic]
+#   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--strategy NAME]
+#             [--outcomes always_ok|deterministic] [--seed SEED]
 #
-# Ф2: настоящий пайплайн — Routing::Planner строит каскад, Execution::Executor
-# исполняет его через State::Providers, Reporting::DecisionsWriter/ReportBuilder
-# пишут оба файла. outcomes: always_ok по умолчанию (совпадает с тем, как
-# провалидированы 4 эталонных кейса организаторов), deterministic — для
-# содержательного прогона approved/rejected/expired на боевой очереди.
+# Ф2: Routing::Planner ранжирует каскад стратегией (Routing::Strategies,
+# Routing::ShareLedger отслеживает доли по ходу очереди), Execution::Executor
+# исполняет через State::Providers, Reporting::DecisionsWriter/ReportBuilder
+# пишут оба файла.
 
 $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 
@@ -21,22 +21,22 @@ require_relative '../lib/io/providers_loader'
 require_relative '../lib/io/queue_loader'
 require_relative '../lib/io/history_loader'
 require_relative '../lib/routing/planner'
+require_relative '../lib/routing/share_ledger'
+require_relative '../lib/routing/strategies/volume_share'
+require_relative '../lib/state/providers'
 require_relative '../lib/execution/executor'
 require_relative '../lib/execution/outcome_source/always_ok'
 require_relative '../lib/execution/outcome_source/deterministic'
-require_relative '../lib/state/providers'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
 HISTORY_PATH = 'reference/data/operations_history.csv'
-# Не seed из времени/окружения — иначе make determinism не совпадёт побайтово.
-DETERMINISTIC_SEED = 'smart-router-42'
 
 def usage
   'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] ' \
-    '[--outcomes always_ok|deterministic]'
+    '[--strategy NAME] [--outcomes NAME] [--seed SEED]'
 end
 
 def fail_with(message)
@@ -44,17 +44,26 @@ def fail_with(message)
   exit 1
 end
 
+def add_routing_options(opts, options)
+  opts.on('--providers PATH', 'Снапшот провайдеров') { |path| options[:providers_path] = path }
+  opts.on('--strategy NAME', 'Стратегия ранжирования (count_share)') do |name|
+    options[:strategy] = name
+  end
+end
+
+def add_outcome_options(opts, options)
+  opts.on('--outcomes NAME', 'Источник исходов: deterministic или always_ok') do |name|
+    options[:outcomes] = name
+  end
+  opts.on('--seed SEED', 'Seed детерминированного источника') { |seed| options[:seed] = seed }
+end
+
 def add_options(opts, options)
   opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
     options[:out_dir] = dir
   end
-  opts.on('--providers PATH', 'Снапшот провайдеров') do |path|
-    options[:providers_path] = path
-  end
-  opts.on('--outcomes SOURCE', %w[always_ok deterministic],
-          'Источник исходов исполнения (always_ok по умолчанию)') do |source|
-    options[:outcomes] = source
-  end
+  add_routing_options(opts, options)
+  add_outcome_options(opts, options)
 end
 
 def build_option_parser(options)
@@ -65,23 +74,20 @@ def build_option_parser(options)
 end
 
 def default_options
-  { out_dir: 'out', providers_path: 'reference/data/providers.json', outcomes: 'always_ok' }
+  { out_dir: 'out', providers_path: 'reference/data/providers.json',
+    strategy: 'count_share', outcomes: 'deterministic', seed: '42' }
 end
 
 def parse_args(argv)
   options = default_options
   parser = build_option_parser(options)
-
-  begin
-    remaining = parser.parse(argv)
-  rescue OptionParser::ParseError => e
-    fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
-  end
-
+  remaining = parser.parse(argv)
   fail_with("Не указан файл очереди.\n#{usage}") if remaining.empty?
 
   options[:queue_path] = remaining.first
   options
+rescue OptionParser::ParseError => e
+  fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
 end
 
 def load_providers(path)
@@ -98,61 +104,109 @@ rescue RuntimeError => e
   fail_with(e.message)
 end
 
-def build_outcome_source(name, providers)
-  return Execution::OutcomeSource::AlwaysOk.new unless name == 'deterministic'
-
-  conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h] }
-  Execution::OutcomeSource::Deterministic.new(seed: DETERMINISTIC_SEED, conversions: conversions)
+def build_outcome_source(options, providers)
+  case options[:outcomes]
+  when 'always_ok' then Execution::OutcomeSource::AlwaysOk.new
+  when 'deterministic'
+    conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
+    Execution::OutcomeSource::Deterministic.new(seed: options[:seed], conversions: conversions)
+  else
+    fail_with("Неизвестный источник исходов #{options[:outcomes].inspect}; " \
+              'допустимы deterministic, always_ok')
+  end
 end
 
-# Attempt#provider у настоящего Outcome — объект Domain::Provider (см. Executor/Violation),
-# а JSON-контракт decisions/report ждёт строку-имя. Нормализуем на границе интеграции, не
-# трогая замороженный формат Attempt.
-def normalize_outcome(outcome)
-  attempts = outcome.attempts.map do |attempt|
-    next attempt unless attempt.provider.respond_to?(:name)
+def settle_share(ledger, outcome, operation)
+  ledger.reserve(outcome.selected, operation)
+  case outcome.result
+  when :approved then ledger.commit(outcome.selected, operation)
+  when :expired then ledger.hold(outcome.selected, operation)
+  when :rejected then ledger.rollback(outcome.selected, operation)
+  end
+end
 
-    attempt.with(provider: attempt.provider.name)
+def first_ranked_attempt?(attempt, plan)
+  attempt.decision == 'selected' && attempt.attempt_no == 1 && plan.candidates.size > 1
+end
+
+def rebuild_attempt(attempt, plan, operation, strategy, ledger)
+  provider_name = attempt.provider.respond_to?(:name) ? attempt.provider.name : attempt.provider
+  return attempt.with(provider: provider_name) unless first_ranked_attempt?(attempt, plan)
+
+  attempt.with(
+    provider: provider_name, reason: 'best_target_adherence',
+    details: strategy.explain(plan.candidates, operation, ledger), strategy: strategy.name
+  )
+end
+
+# Executor не знает про стратегию — переименовывает первую реальную попытку в
+# best_target_adherence с объяснением стратегии, когда кандидатов было больше
+# одного. Заодно нормализует Attempt#provider: у Executor это объект
+# Domain::Provider, а JSON-контракт decisions/report ждёт строку-имя.
+def explain_first_attempt(outcome, plan, operation, strategy, ledger)
+  attempts = outcome.attempts.map do |attempt|
+    rebuild_attempt(attempt, plan, operation, strategy, ledger)
   end
   outcome.with(attempts: attempts)
 end
 
-def route_operation(operation, planner, executor, state)
-  plan = planner.plan(operation, state)
-  outcome = executor.run(plan, operation, state)
-  [operation, normalize_outcome(outcome)]
+def build_pipeline(providers, options, strategy)
+  {
+    planner: Routing::Planner.new(providers: providers, strategy: strategy),
+    executor: Execution::Executor.new(outcomes: build_outcome_source(options, providers)),
+    state: State::Providers.new(providers),
+    ledger: Routing::ShareLedger.new,
+    strategy: strategy
+  }
 end
 
-def build_pairs(operations, providers, outcomes_source)
-  planner = Routing::Planner.new(providers: providers)
-  executor = Execution::Executor.new(outcomes: outcomes_source)
-  state = State::Providers.new(providers)
-
-  operations.map { |operation| route_operation(operation, planner, executor, state) }
+def route_operation(operation, pipeline)
+  plan = pipeline[:planner].plan(operation, pipeline[:ledger])
+  outcome = pipeline[:executor].run(plan, operation, pipeline[:state])
+  explained = explain_first_attempt(
+    outcome, plan, operation, pipeline[:strategy], pipeline[:ledger]
+  )
+  settle_share(pipeline[:ledger], explained, operation)
+  [operation, explained]
 end
 
-def write_outputs(out_dir, pairs, providers, history)
+def build_pairs(operations, providers, options, strategy)
+  pipeline = build_pipeline(providers, options, strategy)
+  operations.map { |operation| route_operation(operation, pipeline) }
+end
+
+def write_outputs(out_dir, pairs, providers, history, strategy)
   FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
 
   Reporting::DecisionsWriter.write(decisions_path, pairs)
-  Reporting::ReportBuilder.write(report_path, pairs, providers: providers, history: history)
+  Reporting::ReportBuilder.write(
+    report_path, pairs, providers: providers, history: history, strategy: strategy.name
+  )
 
   [decisions_path, report_path]
 end
 
+def load_inputs(options)
+  {
+    providers: load_providers(options[:providers_path]),
+    operations: load_queue(options[:queue_path]),
+    history: Io::HistoryLoader.load(HISTORY_PATH),
+    strategy: Routing::Strategies.build(options[:strategy])
+  }
+end
+
 def main(argv)
   options = parse_args(argv)
-  providers = load_providers(options[:providers_path])
-  operations = load_queue(options[:queue_path])
-  history = Io::HistoryLoader.load(HISTORY_PATH)
-  outcomes_source = build_outcome_source(options[:outcomes], providers)
+  inputs = load_inputs(options)
 
-  pairs = build_pairs(operations, providers, outcomes_source)
-  decisions_path, report_path = write_outputs(options[:out_dir], pairs, providers, history)
+  pairs = build_pairs(inputs[:operations], inputs[:providers], options, inputs[:strategy])
+  decisions_path, report_path = write_outputs(
+    options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy]
+  )
 
-  puts "Прочитано операций: #{operations.size}"
+  puts "Прочитано операций: #{inputs[:operations].size}"
   puts "Записано: #{decisions_path}"
   puts "Записано: #{report_path}"
 end
