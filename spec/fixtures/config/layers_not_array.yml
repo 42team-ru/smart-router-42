@@ -1,0 +1,3 @@
+strategy: count_share
+layers: count_share
+fallback_provider: spacepayments

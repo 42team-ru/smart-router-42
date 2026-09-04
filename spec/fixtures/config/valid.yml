@@ -1,0 +1,21 @@
+strategy: count_share
+layers: [conversion, load]
+
+allocator:
+  tie_break: [weight_desc, name_asc]
+
+outcomes:
+  source: deterministic
+  seed: 42
+
+amount_ranges:
+  - { from: 500, to: 50000, prefer: payflow }
+  - { from: 50001, to: null, prefer: vipay }
+
+obligations:
+  payflow: { daily_turnover_min: 2000000 }
+
+rate_limits:
+  vipay: 7
+
+fallback_provider: spacepayments

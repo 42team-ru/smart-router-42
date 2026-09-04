@@ -1,0 +1,32 @@
+# Конфигурация роутинга. Схема и валидация — Config::Loader (lib/config/loader.rb, CFG-1).
+#
+# ВАЖНО: этот файл сейчас ни на что не влияет. bin/route и Planner его не читают —
+# подключение конфига в пайплайн (переключение strategy/layers одной строкой) это
+# CFG-2 (docs/TASKS.md), пока не сделано. До этого момента файл — валидный пример
+# схемы §14 docs/ARCHITECTURE.md, ничего больше.
+
+strategy: count_share
+layers: [] # слоёв ещё не существует (lib/routing/layers/), список намеренно пуст
+
+allocator:
+  tie_break: [weight_desc, name_asc]
+
+outcomes:
+  source: deterministic
+  seed: 42
+  calibrate_from_history: true
+
+amount_ranges:
+  - { from: 500, to: 50000, prefer: payflow }
+  - { from: 50001, to: 100000, prefer: vipay }
+  - { from: 100001, to: null, prefer: quickpay }
+
+obligations:
+  payflow: { daily_turnover_min: 2000000 }
+  vipay: { daily_turnover_max: 5000000 }
+
+rate_limits:
+  vipay: 7
+  quickpay: 15
+
+fallback_provider: spacepayments

@@ -1,0 +1,4 @@
+strategy: count_share
+fallback_provider: spacepayments
+rate_limits:
+  vipay: "seven"

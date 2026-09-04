@@ -1,0 +1,4 @@
+strategy: count_share
+fallback_provider: spacepayments
+amount_ranges:
+  - { from: 500, to: 50000 }
