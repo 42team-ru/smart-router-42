@@ -116,15 +116,6 @@ def build_outcome_source(options, providers)
   end
 end
 
-def settle_share(ledger, outcome, operation)
-  ledger.reserve(outcome.selected, operation)
-  case outcome.result
-  when :approved then ledger.commit(outcome.selected, operation)
-  when :expired then ledger.hold(outcome.selected, operation)
-  when :rejected then ledger.rollback(outcome.selected, operation)
-  end
-end
-
 def first_ranked_attempt?(attempt, plan)
   attempt.decision == 'selected' && attempt.attempt_no == 1 && plan.candidates.size > 1
 end
@@ -151,11 +142,12 @@ def explain_first_attempt(outcome, plan, operation, strategy, ledger)
 end
 
 def build_pipeline(providers, options, strategy)
+  state = State::Providers.new(providers)
   {
     planner: Routing::Planner.new(providers: providers, strategy: strategy),
     executor: Execution::Executor.new(outcomes: build_outcome_source(options, providers)),
-    state: State::Providers.new(providers),
-    ledger: Routing::ShareLedger.new,
+    state: state,
+    ledger: state.shares,
     strategy: strategy
   }
 end
@@ -166,7 +158,6 @@ def route_operation(operation, pipeline)
   explained = explain_first_attempt(
     outcome, plan, operation, pipeline[:strategy], pipeline[:ledger]
   )
-  settle_share(pipeline[:ledger], explained, operation)
   [operation, explained]
 end
 
