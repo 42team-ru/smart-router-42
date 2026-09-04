@@ -6,15 +6,16 @@ module Routing
   #   candidates — Array<Domain::Provider>, порядок = порядок каскада, без дублей
   #   skipped    — Array<[Domain::Provider, Routing::Violation]>
   class RoutePlan
-    attr_reader :operation, :candidates, :skipped
+    attr_reader :operation, :candidates, :skipped, :trace
 
-    def initialize(operation:, candidates:, skipped:)
+    def initialize(operation:, candidates:, skipped:, trace: nil)
       validate_no_duplicates!(candidates)
       validate_no_overlap!(candidates, skipped)
 
       @operation = operation
       @candidates = candidates
       @skipped = skipped
+      @trace = trace
       freeze
     end
 

@@ -18,7 +18,8 @@ RSpec.describe Routing::Assembly do
 
   def cfg(strategy: 'count_share', layers: [], amount_ranges: [])
     Config::RoutingConfig.new(
-      strategy: strategy, layers: layers, allocator: {}, outcomes: {},
+      strategy: strategy, layers: layers, goals: {}, strategy_selection: {},
+      allocator: {}, outcomes: {},
       amount_ranges: amount_ranges, obligations: {}, rate_limits: {},
       fallback_provider: 'spacepayments'
     )
@@ -101,6 +102,12 @@ RSpec.describe Routing::Assembly do
 
     it 'не подхватывает одноимённую стратегию: реестры раздельные' do
       expect { described_class.build('conversion') }.to raise_error(KeyError, /unknown layer/)
+    end
+
+    it 'автозагрузка каталога слоёв явно сортирует Dir' do
+      source = File.read(File.expand_path('../../lib/routing/layers.rb', __dir__))
+
+      expect(source).to include("Dir[File.expand_path('layers/*.rb', __dir__)].sort")
     end
   end
 end

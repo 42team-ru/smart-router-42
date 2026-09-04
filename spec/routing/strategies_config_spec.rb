@@ -15,10 +15,11 @@ require_relative '../support/provider_factory'
 RSpec.describe Routing::Strategies do
   include ProviderFactory
 
-  # Полный набор ключей Config::RoutingConfig: Data требует все восемь.
+  # Полный набор ключей Config::RoutingConfig: Data требует все десять.
   def config(strategy: 'count_share', amount_ranges: [], layers: [])
     Config::RoutingConfig.new(
-      strategy: strategy, layers: layers, allocator: {}, outcomes: {},
+      strategy: strategy, layers: layers, goals: {}, strategy_selection: {},
+      allocator: {}, outcomes: {},
       amount_ranges: amount_ranges, obligations: {}, rate_limits: {},
       fallback_provider: 'spacepayments'
     )

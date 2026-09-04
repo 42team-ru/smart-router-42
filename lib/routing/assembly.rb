@@ -29,7 +29,7 @@ module Routing
       # Пока всегда []: реестр слоёв пуст. Непустой список — KeyError на первом
       # же имени, молчаливого игнорирования нет.
       def layers(config:)
-        config.layers.map { |name| Layers.build(name) }
+        config.layers.map { |name| Layers.build(name, config: config) }
       end
 
       private

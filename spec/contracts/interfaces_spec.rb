@@ -91,16 +91,16 @@ RSpec.describe 'семь замороженных интерфейсов' do
   describe 'Routing::RoutePlan (интерфейс 4: RoutePlan)' do
     subject(:described_class) { Routing::RoutePlan }
 
-    it 'сигнатура .new — только keyword-параметры operation, candidates, skipped' do
+    it 'сигнатура .new сохраняет три обязательных ключа и добавляет optional trace' do
       expect(described_class.instance_method(:initialize).parameters).to eq(
-        [%i[keyreq operation], %i[keyreq candidates], %i[keyreq skipped]]
+        [%i[keyreq operation], %i[keyreq candidates], %i[keyreq skipped], %i[key trace]]
       )
     end
 
     it 'строится из пустых candidates/skipped без ошибок' do
       plan = described_class.new(operation: nil, candidates: [], skipped: [])
 
-      expect(plan.empty?).to be(true)
+      expect([plan.empty?, plan.trace]).to eq([true, nil])
     end
 
     it 'дубли по имени в candidates поднимают ArgumentError' do

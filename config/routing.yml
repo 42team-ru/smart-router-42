@@ -14,6 +14,11 @@
 strategy: count_share
 layers: [] # слоёв ещё не существует (lib/routing/layers/), список намеренно пуст
 
+# Пороги целей для слоёв (lib/routing/layers). Инертны, пока layers пуст.
+goals:
+  budget_headroom: { psi_threshold_micro: 100000 } # ψ = 0.100
+  share_ceiling: { tolerance_bp: 0 }
+
 allocator:
   tie_break: [weight_desc, name_asc]
 

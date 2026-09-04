@@ -22,13 +22,24 @@ module Routing
         klass
       end
 
-      def build(name)
-        registry.fetch(name.to_s).new
+      def build(name, config: nil)
+        klass = registry.fetch(name.to_s)
+        return klass.from_config(config) if config && klass.respond_to?(:from_config)
+
+        klass.new
       rescue KeyError
         raise KeyError, "unknown layer #{name.inspect}; #{hint}"
       end
 
       def known = registry.keys.sort
+
+      # Каталог слоёв загружается целиком, как каталог стратегий. Порядок файлов
+      # наблюдаем через known и тексты ошибок, поэтому сортировка обязательна.
+      def load_all!
+        # rubocop:disable-next Lint/RedundantDirGlobSort -- порядок часть контракта.
+        Dir[File.expand_path('layers/*.rb', __dir__)].sort.each { |path| require path }
+        known
+      end
 
       private
 

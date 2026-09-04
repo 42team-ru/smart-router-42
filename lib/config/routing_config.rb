@@ -5,7 +5,7 @@ module Config
   # прошедшие валидацию схемы — никакой логики. Подключение в пайплайн (CFG-2)
   # и семантика полей (какая стратегия/слои реально существуют) — не здесь.
   RoutingConfig = Data.define(
-    :strategy, :layers, :allocator, :outcomes,
+    :strategy, :layers, :goals, :strategy_selection, :allocator, :outcomes,
     :amount_ranges, :obligations, :rate_limits, :fallback_provider
   )
 end

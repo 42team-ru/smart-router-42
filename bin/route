@@ -41,6 +41,7 @@ require_relative '../lib/reporting/report_builder'
 # lib/routing/strategies/ плюс строка strategy: в конфиге; bin/route править не
 # нужно, поимённых require здесь нет намеренно.
 Routing::Strategies.load_all!
+Routing::Layers.load_all!
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
@@ -144,8 +145,14 @@ def rebuild_attempt(attempt, plan, operation, strategy, ledger)
 
   attempt.with(
     provider: provider_name, reason: 'best_target_adherence',
-    details: strategy.explain(plan.candidates, operation, ledger), strategy: strategy.name
+    details: attempt_details(plan, operation, strategy, ledger), strategy: plan.trace.strategy_name
   )
+end
+
+def attempt_details(plan, operation, strategy, ledger)
+  return plan.trace.details unless plan.trace.segments.one?
+
+  strategy.explain(plan.candidates, operation, ledger)
 end
 
 # Executor не знает про стратегию — переименовывает первую реальную попытку в
@@ -159,11 +166,12 @@ def explain_first_attempt(outcome, plan, operation, strategy, ledger)
   outcome.with(attempts: attempts)
 end
 
-def build_pipeline(providers, options, strategy, fallback_provider)
+def build_pipeline(providers, options, strategy, fallback_provider, layers)
   state = State::Providers.new(providers)
   {
     planner: Routing::Planner.new(providers: providers, strategy: strategy,
-                                  fallback_provider: fallback_provider),
+                                  fallback_provider: fallback_provider,
+                                  layers: Routing::LayerStack.new(layers)),
     executor: Execution::Executor.new(outcomes: build_outcome_source(options, providers)),
     state: state,
     ledger: state.shares,
@@ -182,7 +190,7 @@ end
 
 def build_pairs(operations, providers, options, inputs)
   pipeline = build_pipeline(providers, options, inputs[:strategy],
-                            inputs[:config].fallback_provider)
+                            inputs[:config].fallback_provider, inputs[:layers])
   operations.map { |operation| route_operation(operation, pipeline) }
 end
 
@@ -209,8 +217,13 @@ end
 
 # Слои в Ф3 не применяются: реестр пуст. Непустой layers обязан ронять запуск,
 # иначе фича выглядит существующей, ничего не меняя.
-def build_strategy(config, override)
+def build_layers(config)
   Routing::Assembly.layers(config: config)
+rescue KeyError => e
+  fail_with(e.message)
+end
+
+def build_strategy(config, override)
   Routing::Assembly.strategy(config: config, override: override)
 rescue KeyError => e
   fail_with(e.message)
@@ -223,6 +236,7 @@ def load_inputs(options)
     operations: load_queue(options[:queue_path]),
     history: Io::HistoryLoader.load(HISTORY_PATH),
     config: config,
+    layers: build_layers(config),
     strategy: build_strategy(config, options[:strategy])
   }
 end

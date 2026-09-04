@@ -13,6 +13,11 @@ module Config
   # Config::RoutingConfig. Останавливается на первом найденном нарушении —
   # один SchemaError на вызов, как остальные загрузчики в lib/io/.
   module Loader
+    OPTIONAL_DEFAULTS = {
+      layers: [], goals: {}, strategy_selection: {}, allocator: {}, outcomes: {},
+      amount_ranges: [], obligations: {}, rate_limits: {}
+    }.freeze
+
     def self.load(path)
       raw = read_yaml!(path)
       SchemaValidator.validate!(raw)
@@ -32,16 +37,14 @@ module Config
     def self.build_config(raw)
       RoutingConfig.new(
         strategy: raw['strategy'],
-        layers: raw['layers'] || [],
-        allocator: raw['allocator'] || {},
-        outcomes: raw['outcomes'] || {},
-        amount_ranges: raw['amount_ranges'] || [],
-        obligations: raw['obligations'] || {},
-        rate_limits: raw['rate_limits'] || {},
-        fallback_provider: raw['fallback_provider']
+        fallback_provider: raw['fallback_provider'], **optional_values(raw)
       )
     end
 
-    private_class_method :read_yaml!, :build_config
+    def self.optional_values(raw)
+      OPTIONAL_DEFAULTS.to_h { |key, default| [key, raw[key.to_s] || default.dup] }
+    end
+
+    private_class_method :read_yaml!, :build_config, :optional_values
   end
 end
