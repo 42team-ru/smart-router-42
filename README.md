@@ -240,7 +240,60 @@ bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/load
 Скрипт временно пишет в `lib/`, поэтому в `make gate` он не входит и
 запускается руками; копия удаляется при любом исходе, включая Ctrl+C.
 
-## 8. Что мы сознательно не делаем
+## 8. HTTP-сервис (preview)
+
+Параллельно к CLI ведётся минимальный HTTP-слой поверх того же ядра: потоковая
+обработка операций одна-за-одной, глобальное in-memory состояние провайдеров,
+живая аналитика из SQLite. CLI остаётся главной точкой входа и валидатором
+организаторов не трогается — сервис нужен для демо и параллельной интеграции.
+
+**Что уже есть (Stage 1 — контракт и UI):**
+
+- **`docs/openapi.yaml`** — OpenAPI 3.0.3, 12 путей, 23 схемы. Источник правды
+  для реализации и клиентов.
+- **`public/swagger/`** — Swagger UI (swagger-ui-dist 5.32.15) с двойным режимом
+  загрузки спеки: `file://` → относительный путь к YAML, `http://` → `/openapi.yaml`.
+
+**Как посмотреть API прямо сейчас (сервер не нужен):**
+
+```
+xdg-open public/swagger/index.html   # или open, или просто в браузере
+```
+
+UI подхватывает спеку из `public/swagger/openapi-spec.js` — это сгенерированная
+из `docs/openapi.yaml` встроенная копия (нужна, потому что Chrome блокирует XHR
+в `file://` к соседним файлам). После правки `docs/openapi.yaml` пересобрать:
+
+```
+make openapi-embed
+```
+
+Через query-string `?spec=<url>` можно указать другую спеку (например, версию
+для live-сервиса: `?spec=/openapi.yaml`).
+
+**Другие таргеты** (`Makefile`):
+
+```
+make openapi-check                   # синтаксическая валидация docs/openapi.yaml
+make openapi-embed                   # openapi-check + regenerate public/swagger/openapi-spec.js
+make install-swagger-ui              # переливает assets, наш index.html и initializer.js остаются нетронутыми
+```
+
+**Что будет во втором этапе (после аппрува контракта):**
+
+- Sinatra + Puma (workers=1, threads=1), Rack-entry `config.ru`, launcher `bin/serve`.
+- `lib/api/{app,gateway,decisions_repo,stream_report_builder,validators,errors,serializers}.rb`.
+- SQLite (`data/decisions.db`, WAL), нормализованная схема `decisions` + `attempts`,
+  настраиваемый retention (дефолт 24ч), on-write чистка.
+- `config/service.yml` — port, db_path, retention_hours.
+- RSpec-набор `spec/api/**` с `:memory:` SQLite.
+- End-to-end verification: `scripts/compare_batch_vs_cli.sh` — байт-в-байт
+  сверка `/operations/batch` с `bin/route` на одной очереди.
+
+Ядро (`lib/routing/**`, `lib/execution/**`, `lib/state/**`) в HTTP-слое не
+меняется ни на строку — инварианты из CLAUDE.md сохраняются.
+
+## 9. Что мы сознательно не делаем
 
 - **Нейросети, ML, предсказание успеха** — прямой запрет ТЗ, дисквалификация.
 - **Rails, БД, очереди, Sidekiq, Redis** — вход и выход это файлы, веб-слой

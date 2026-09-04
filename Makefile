@@ -12,7 +12,7 @@
 QUEUE ?= reference/data/operations_queue_10.json
 OUT   ?= out/routing_decisions_test.json
 
-.PHONY: gate test lint fmt validate route determinism no-random install deliver help
+.PHONY: gate test lint fmt validate route determinism no-random install deliver help install-swagger-ui openapi-check openapi-embed
 
 gate: test lint no-random
 
@@ -55,3 +55,37 @@ install:
 
 help:
 	@echo "gate test lint fmt validate route determinism no-random install deliver"
+	@echo "openapi-check openapi-embed install-swagger-ui"
+
+# Проверка синтаксиса OpenAPI-спеки (только YAML-парсинг, без semantic-валидации).
+openapi-check:
+	@ruby -e 'require "yaml"; d = YAML.load_file("docs/openapi.yaml"); \
+	  raise "openapi: field missing" unless d["openapi"]; \
+	  raise "paths: empty" if d["paths"].to_h.empty?; \
+	  raise "components.schemas: empty" if d.dig("components","schemas").to_h.empty?; \
+	  puts "openapi.yaml: OK (#{d["openapi"]}, paths=#{d["paths"].keys.length}, schemas=#{d["components"]["schemas"].keys.length})"'
+
+# Пересобирает public/swagger/openapi-spec.js из docs/openapi.yaml.
+# Нужно каждый раз после правки спеки, чтобы file:// preview показывал свежее.
+# При http:// (запущенный сервис) файл безобиден — Sinatra отдаёт /openapi.yaml напрямую.
+openapi-embed: openapi-check
+	@ruby scripts/embed_openapi.rb
+
+# Idempotent: обновляет только asset-файлы swagger-ui, наши патчи в
+# index.html и swagger-initializer.js остаются нетронутыми.
+SWAGGER_UI_VERSION ?= 5.32.15
+install-swagger-ui:
+	@echo "Downloading swagger-ui-dist $(SWAGGER_UI_VERSION)..."
+	@mkdir -p public/swagger /tmp/swagger-ui-extract
+	@curl -sfL https://registry.npmjs.org/swagger-ui-dist/-/swagger-ui-dist-$(SWAGGER_UI_VERSION).tgz -o /tmp/swagger-ui.tgz
+	@tar -xzf /tmp/swagger-ui.tgz --strip-components=1 -C /tmp/swagger-ui-extract
+	@cp /tmp/swagger-ui-extract/swagger-ui.css                  public/swagger/
+	@cp /tmp/swagger-ui-extract/swagger-ui-bundle.js            public/swagger/
+	@cp /tmp/swagger-ui-extract/swagger-ui-standalone-preset.js public/swagger/
+	@cp /tmp/swagger-ui-extract/index.css                       public/swagger/
+	@cp /tmp/swagger-ui-extract/favicon-16x16.png               public/swagger/
+	@cp /tmp/swagger-ui-extract/favicon-32x32.png               public/swagger/
+	@cp /tmp/swagger-ui-extract/LICENSE                         public/swagger/
+	@rm -rf /tmp/swagger-ui.tgz /tmp/swagger-ui-extract
+	@echo "Готово. index.html и swagger-initializer.js сохранены (наши патчи)."
+	@echo "Открой public/swagger/index.html в браузере (file://) для preview."
