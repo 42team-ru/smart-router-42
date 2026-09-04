@@ -92,6 +92,19 @@ RSpec.describe 'bin/route' do
     end
   end
 
+  # D-1: не переспецифицирует построчный формат (это спек
+  # spec/reporting/console_summary_spec.rb) -- только ловит факт стыковки
+  # Reporting::ConsoleSummary в bin/route.
+  it 'печатает в STDOUT решение по каждой операции и итоговую сводку' do
+    Dir.mktmpdir do |tmp|
+      stdout, _stderr, = run_route(queue_path, '--out-dir', tmp)
+
+      queue.each { |operation| expect(stdout).to include(operation['operation_id']) }
+      expect(stdout).to include('competitive_ratio=')
+      expect(stdout).to include('Fallback:')
+    end
+  end
+
   it 'даёт побайтово одинаковый результат на двух прогонах' do
     Dir.mktmpdir do |tmp_a|
       Dir.mktmpdir do |tmp_b|

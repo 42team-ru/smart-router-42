@@ -36,6 +36,7 @@ require_relative '../lib/execution/outcome_source/always_ok'
 require_relative '../lib/execution/outcome_source/deterministic'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
+require_relative '../lib/reporting/console_summary'
 require_relative '../lib/offline/objective'
 require_relative '../lib/offline/oracle'
 require_relative '../lib/offline/benchmark_block'
@@ -325,9 +326,26 @@ def main(argv)
     benchmark: benchmark
   )
 
+  print_console_summary(pairs, inputs, benchmark)
+
   puts "Прочитано операций: #{inputs[:operations].size}"
   puts "Записано: #{decisions_path}"
   puts "Записано: #{report_path}"
+end
+
+# D-1: report строится второй раз намеренно -- .write (в write_outputs) уже
+# построил и отбросил свой экземпляр. Дорогая часть (офлайн-оракул) в
+# benchmark уже посчитана один раз в build_benchmark и передаётся сюда
+# готовым хешем, повторно не считается -- пересчитывается только дешёвая
+# часть (distribution/achievable/deviation_causes/recommendations).
+def print_console_summary(pairs, inputs, benchmark)
+  report = Reporting::ReportBuilder.build(
+    pairs, providers: inputs[:providers], history: inputs[:history],
+           strategy: inputs[:strategy].name, benchmark: benchmark
+  )
+
+  Reporting::ConsoleSummary.operation_lines(pairs).each { |line| puts line }
+  Reporting::ConsoleSummary.summary_lines(report).each { |line| puts line }
 end
 
 main(ARGV) if $PROGRAM_NAME == __FILE__
