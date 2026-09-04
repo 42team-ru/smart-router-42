@@ -126,5 +126,81 @@ RSpec.describe 'bin/route' do
       expect(stderr).not_to be_empty
     end
   end
+
+  # CFG-2 (W3): конфиг доезжает до пайплайна. Боевой config/routing.yml спеки
+  # только читают — правки уходят во временный файл в Dir.mktmpdir.
+  describe 'конфигурация' do
+    let(:production_config) { File.expand_path('../../config/routing.yml', __dir__) }
+
+    def config_with(dir, line, replacement)
+      source = File.read(production_config)
+      raise "строка #{line.inspect} исчезла из config/routing.yml" unless source.include?(line)
+
+      path = File.join(dir, 'routing.yml')
+      File.write(path, source.sub(line, replacement))
+      path
+    end
+
+    def distribution(dir)
+      decisions = JSON.parse(File.read(File.join(dir, 'routing_decisions_test.json')))
+      decisions.each_with_object(Hash.new(0)) { |d, acc| acc[d['selected_provider']] += 1 }
+    end
+
+    it 'берёт стратегию из YAML, когда --strategy не передан' do
+      Dir.mktmpdir do |tmp|
+        config = config_with(tmp, 'strategy: count_share', 'strategy: load')
+
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+
+        expect(status.exitstatus).to eq(0), stderr
+        expect(distribution(tmp)).to eq('quickpay' => 8, 'payflow' => 2)
+      end
+    end
+
+    it '--strategy перекрывает ключ strategy из YAML' do
+      Dir.mktmpdir do |tmp|
+        config = config_with(tmp, 'strategy: count_share', 'strategy: load')
+
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config,
+                                            '--strategy', 'priority')
+
+        expect(status.exitstatus).to eq(0), stderr
+        expect(distribution(tmp)).to eq('vipay' => 4, 'payflow' => 3, 'quickpay' => 3)
+      end
+    end
+
+    it 'на опечатку в имени стратегии падает кодом 1 и называет конфиг' do
+      Dir.mktmpdir do |tmp|
+        config = config_with(tmp, 'strategy: count_share', 'strategy: count_shar')
+
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+
+        expect(status.exitstatus).to eq(1)
+        expect(stderr).to include('config/routing.yml').and include('count_share')
+      end
+    end
+
+    it 'на непустой layers падает кодом 1, а не игнорирует его молча' do
+      Dir.mktmpdir do |tmp|
+        config = config_with(tmp, 'layers: []', 'layers: [conversion]')
+
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+
+        expect(status.exitstatus).to eq(1)
+        expect(stderr).to include('layer').and include('conversion')
+      end
+    end
+
+    it 'на отсутствующий файл конфига даёт сообщение, а не трейс' do
+      Dir.mktmpdir do |tmp|
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp,
+                                            '--config', 'no/such/file.yml')
+
+        expect(status.exitstatus).to eq(1)
+        expect(stderr).to include('no/such/file.yml')
+        expect(stderr).not_to include('backtrace')
+      end
+    end
+  end
 end
 # rubocop:enable RSpec/DescribeClass, RSpec/MultipleExpectations, RSpec/ExampleLength

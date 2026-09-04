@@ -107,27 +107,30 @@ RSpec.describe Reporting::ReportBuilder do
       expect(report['total_operations']).to eq(3)
     end
 
+    # achievable_pct здесь 0.0 у всех внешних: синтетический снапшот фикстуры
+    # никого не допускает до этих трёх операций, значит достижимая доля и есть
+    # ноль. Настоящие числа публичной очереди проверяет спек ниже.
     it 'считает distribution по итоговому selected_provider' do
       expect(report['distribution']).to eq(
         'vipay' => { 'count' => 1, 'share_pct' => 33.3, 'target_pct' => 40,
-                     'achievable_pct' => 40.0, 'deviation_pp' => -6.7 },
+                     'achievable_pct' => 0.0, 'deviation_pp' => 33.3 },
         'payflow' => { 'count' => 0, 'share_pct' => 0.0, 'target_pct' => 35,
-                       'achievable_pct' => 35.0, 'deviation_pp' => -35.0 },
+                       'achievable_pct' => 0.0, 'deviation_pp' => 0.0 },
         'quickpay' => { 'count' => 1, 'share_pct' => 33.3, 'target_pct' => 25,
-                        'achievable_pct' => 25.0, 'deviation_pp' => 8.3 },
+                        'achievable_pct' => 0.0, 'deviation_pp' => 33.3 },
         'spacepayments' => { 'count' => 1, 'share_pct' => 33.3, 'target_pct' => 0,
-                             'achievable_pct' => 0.0, 'deviation_pp' => 33.3 }
+                             'achievable_pct' => nil, 'deviation_pp' => 33.3 }
       )
     end
 
     it 'считает volume_distribution по сумме заявок итогового provider' do
       expect(report['volume_distribution']['payflow']).to eq(
         'amount' => 0, 'share_pct' => 0.0, 'target_pct' => 25,
-        'achievable_pct' => 25.0, 'deviation_pp' => -25.0
+        'achievable_pct' => nil, 'deviation_pp' => -25.0
       )
       expect(report['volume_distribution']['quickpay']).to eq(
         'amount' => 100_000, 'share_pct' => 58.8, 'target_pct' => 25,
-        'achievable_pct' => 25.0, 'deviation_pp' => 33.8
+        'achievable_pct' => nil, 'deviation_pp' => 33.8
       )
     end
 

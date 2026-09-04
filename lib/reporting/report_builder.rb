@@ -2,6 +2,8 @@
 
 require 'json'
 require_relative '../routing/reasons'
+require_relative '../routing/achievable'
+require_relative '../routing/constraints'
 require_relative 'distributions'
 require_relative 'recommendations'
 require_relative 'utilization'
@@ -13,10 +15,15 @@ module Reporting
   # DecisionsWriter, плюс снимок провайдеров (цели, лимиты, паспортные
   # конверсии) и калибровка Io::HistoryLoader (наблюдаемые конверсии).
   #
-  # achievable_pct/benchmark/deviation_causes — заглушки (docs/TASKS.md,
-  # «Правила ведения»: формат отчёта после гейта Ф2 не меняется, поэтому эти
-  # поля заводятся в структуре сразу, с настоящей логикой позже).
+  # achievable_pct считается по-настоящему: Routing::Achievable.for_queue (R-12)
+  # на множестве допустимых по ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт
+  # только в отчёт и никогда в принятие решений.
+  #
+  # benchmark/deviation_causes остаются заглушками: это X-5 и A-7 из Ф5. Поля
+  # заведены в структуре заранее -- формат отчёта после гейта Ф2 не меняется.
   module ReportBuilder
+    FALLBACK_PROVIDER = 'spacepayments'
+
     def self.build(pairs, providers:, history: {}, strategy: nil)
       operations = pairs.map(&:first)
       outcomes = pairs.map(&:last)
@@ -45,13 +52,32 @@ module Reporting
     private_class_method :sections
 
     def self.distributions(pairs, outcomes, providers)
+      achievable = achievable_shares(pairs.map(&:first), providers)
+
       {
-        'distribution' => Distributions.by_final(pairs, providers, :count),
-        'volume_distribution' => Distributions.by_final(pairs, providers, :amount),
+        'distribution' => Distributions.by_final(pairs, providers, :count, achievable),
+        'volume_distribution' => Distributions.by_final(pairs, providers, :amount, achievable),
         'attempt_distribution' => Distributions.by_attempt(outcomes, providers)
       }
     end
     private_class_method :distributions
+
+    # Допуск считается по исходному снапшоту, без state: списания лимитов пул
+    # только сужают, а достижимость -- это потолок «как могло бы быть».
+    # spacepayments в множество не входит: он fallback по допуску, и включение
+    # его в eligibility сломало бы нижние границы Achievable (операция с
+    # единственным внешним провайдером перестала бы такой считаться).
+    def self.achievable_shares(operations, providers)
+      external = providers.reject { |provider| provider.name == FALLBACK_PROVIDER }
+      eligibility = operations.to_h do |operation|
+        names = external.select { |provider| Routing::Constraints.eligible?(provider, operation) }
+        [operation.operation_id, names.map(&:name)]
+      end
+
+      Routing::Achievable.for_queue(operations: operations, providers: providers,
+                                    eligibility: eligibility)
+    end
+    private_class_method :achievable_shares
 
     def self.analytics(pairs, outcomes, providers, history)
       {

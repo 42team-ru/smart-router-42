@@ -4,8 +4,13 @@
 # Единственная точка входа пайплайна умного роутинга.
 #
 # Использование:
-#   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--strategy NAME]
-#             [--outcomes always_ok|deterministic] [--seed SEED]
+#   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--config PATH]
+#             [--strategy NAME] [--outcomes always_ok|deterministic] [--seed SEED]
+#
+# Ф3 (CFG-2): поведение задаёт config/routing.yml — bin/route читает его на
+# старте, один раз, и передаёт объектом в Routing::Assembly. Ни Planner, ни
+# стратегии файловой системы не касаются. Флаг --strategy перекрывает ключ
+# strategy из YAML; кода-дефолта стратегии больше нет.
 #
 # Ф2: Routing::Planner ранжирует каскад стратегией (Routing::Strategies,
 # Routing::ShareLedger отслеживает доли по ходу очереди), Execution::Executor
@@ -20,14 +25,11 @@ require 'fileutils'
 require_relative '../lib/io/providers_loader'
 require_relative '../lib/io/queue_loader'
 require_relative '../lib/io/history_loader'
+require_relative '../lib/config/loader'
+require_relative '../lib/routing/assembly'
 require_relative '../lib/routing/planner'
 require_relative '../lib/routing/share_ledger'
-require_relative '../lib/routing/strategies/volume_share'
-require_relative '../lib/routing/strategies/priority'
-require_relative '../lib/routing/strategies/amount_range'
-require_relative '../lib/routing/strategies/conversion'
-require_relative '../lib/routing/strategies/load'
-require_relative '../lib/routing/strategies/obligations'
+require_relative '../lib/routing/strategies'
 require_relative '../lib/state/providers'
 require_relative '../lib/execution/executor'
 require_relative '../lib/execution/outcome_source/always_ok'
@@ -35,13 +37,18 @@ require_relative '../lib/execution/outcome_source/deterministic'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
 
+# CFG-3: каталог стратегий загружается целиком. Новая стратегия — файл в
+# lib/routing/strategies/ плюс строка strategy: в конфиге; bin/route править не
+# нужно, поимённых require здесь нет намеренно.
+Routing::Strategies.load_all!
+
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
 HISTORY_PATH = 'reference/data/operations_history.csv'
 
 def usage
   'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] ' \
-    '[--strategy NAME] [--outcomes NAME] [--seed SEED]'
+    '[--config PATH] [--strategy NAME] [--outcomes NAME] [--seed SEED]'
 end
 
 def fail_with(message)
@@ -51,6 +58,9 @@ end
 
 def add_routing_options(opts, options)
   opts.on('--providers PATH', 'Снапшот провайдеров') { |path| options[:providers_path] = path }
+  opts.on('--config PATH', 'Файл конфигурации (по умолчанию config/routing.yml)') do |path|
+    options[:config_path] = path
+  end
   opts.on('--strategy NAME',
           "Стратегия ранжирования: #{Routing::Strategies.known.join(', ')}") do |name|
     options[:strategy] = name
@@ -80,8 +90,10 @@ def build_option_parser(options)
 end
 
 def default_options
+  # strategy здесь намеренно нет: имя стратегии приходит из конфига, а
+  # options[:strategy] остаётся nil, пока не передан --strategy.
   { out_dir: 'out', providers_path: 'reference/data/providers.json',
-    strategy: 'count_share', outcomes: 'deterministic', seed: '42' }
+    config_path: 'config/routing.yml', outcomes: 'deterministic', seed: '42' }
 end
 
 def parse_args(argv)
@@ -147,10 +159,11 @@ def explain_first_attempt(outcome, plan, operation, strategy, ledger)
   outcome.with(attempts: attempts)
 end
 
-def build_pipeline(providers, options, strategy)
+def build_pipeline(providers, options, strategy, fallback_provider)
   state = State::Providers.new(providers)
   {
-    planner: Routing::Planner.new(providers: providers, strategy: strategy),
+    planner: Routing::Planner.new(providers: providers, strategy: strategy,
+                                  fallback_provider: fallback_provider),
     executor: Execution::Executor.new(outcomes: build_outcome_source(options, providers)),
     state: state,
     ledger: state.shares,
@@ -167,8 +180,9 @@ def route_operation(operation, pipeline)
   [operation, explained]
 end
 
-def build_pairs(operations, providers, options, strategy)
-  pipeline = build_pipeline(providers, options, strategy)
+def build_pairs(operations, providers, options, inputs)
+  pipeline = build_pipeline(providers, options, inputs[:strategy],
+                            inputs[:config].fallback_provider)
   operations.map { |operation| route_operation(operation, pipeline) }
 end
 
@@ -185,19 +199,31 @@ def write_outputs(out_dir, pairs, providers, history, strategy)
   [decisions_path, report_path]
 end
 
-def build_strategy(name)
-  Routing::Strategies.build(name)
-rescue KeyError
-  fail_with("Неизвестная стратегия #{name.inspect}; " \
-            "допустимы #{Routing::Strategies.known.join(', ')}")
+# Config::SchemaError наследует RuntimeError: битый или отсутствующий конфиг
+# должен давать сообщение и код 1, а не трейс.
+def load_config(path)
+  Config::Loader.load(path)
+rescue RuntimeError => e
+  fail_with(e.message)
+end
+
+# Слои в Ф3 не применяются: реестр пуст. Непустой layers обязан ронять запуск,
+# иначе фича выглядит существующей, ничего не меняя.
+def build_strategy(config, override)
+  Routing::Assembly.layers(config: config)
+  Routing::Assembly.strategy(config: config, override: override)
+rescue KeyError => e
+  fail_with(e.message)
 end
 
 def load_inputs(options)
+  config = load_config(options[:config_path])
   {
     providers: load_providers(options[:providers_path]),
     operations: load_queue(options[:queue_path]),
     history: Io::HistoryLoader.load(HISTORY_PATH),
-    strategy: build_strategy(options[:strategy])
+    config: config,
+    strategy: build_strategy(config, options[:strategy])
   }
 end
 
@@ -205,7 +231,7 @@ def main(argv)
   options = parse_args(argv)
   inputs = load_inputs(options)
 
-  pairs = build_pairs(inputs[:operations], inputs[:providers], options, inputs[:strategy])
+  pairs = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
   decisions_path, report_path = write_outputs(
     options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy]
   )

@@ -1,9 +1,15 @@
 # Конфигурация роутинга. Схема и валидация — Config::Loader (lib/config/loader.rb, CFG-1).
 #
-# ВАЖНО: этот файл сейчас ни на что не влияет. bin/route и Planner его не читают —
-# подключение конфига в пайплайн (переключение strategy/layers одной строкой) это
-# CFG-2 (docs/TASKS.md), пока не сделано. До этого момента файл — валидный пример
-# схемы §14 docs/ARCHITECTURE.md, ничего больше.
+# Файл читает bin/route на старте, один раз, и передаёт объектом в
+# Routing::Assembly (CFG-2). Смена ключа strategy здесь меняет распределение без
+# правок кода. Флаг --strategy перекрывает ключ strategy; путь к самому файлу
+# меняется флагом --config.
+#
+# Влияют сегодня: strategy, amount_ranges (при strategy: amount_range),
+# fallback_provider, layers (только как проверка: непустой список — ошибка
+# запуска, слоёв ещё нет). Секции obligations и rate_limits схема валидирует, но
+# в поведение они не подключены: полей daily_turnover_min/max и
+# requests_per_minute_limit нет в reference/data/providers.json.
 
 strategy: count_share
 layers: [] # слоёв ещё не существует (lib/routing/layers/), список намеренно пуст

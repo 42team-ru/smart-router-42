@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative '../strategies'
-require_relative '../../config/loader'
 
 module Routing
   module Strategies
@@ -10,19 +9,21 @@ module Routing
     # отсев по limit_amount_min/max провайдера). Это разные механизмы, оба
     # намеренно существуют (см. docs/ARCHITECTURE.md §8).
     #
-    # Полосы приходят как хэши со строковыми ключами (сырой YAML через
-    # Config::Loader): {"from"=>500, "to"=>50000, "prefer"=>"payflow"}.
+    # Полосы приходят сверху — Strategies.build('amount_range', config:) зовёт
+    # from_config. Сам класс файлов не открывает: конфиг читает только bin/route.
+    # Формат полосы — хэш со строковыми ключами (сырой YAML через Config::Loader):
+    # {"from"=>500, "to"=>50000, "prefer"=>"payflow"}.
+    #
+    # Дефолт — пустой список, а не копия полос из YAML: вторая копия тех же
+    # чисел разъехалась бы с конфигом молча. Без полос стратегия честно
+    # вырождается в порядок по priority.
     class AmountRange < Base
-      CONFIG_PATH = File.expand_path('../../../config/routing.yml', __dir__)
-
-      def initialize(ranges: self.class.default_ranges)
+      def initialize(ranges: [])
         super()
         @ranges = ranges
       end
 
-      def self.default_ranges
-        @default_ranges ||= Config::Loader.load(CONFIG_PATH).amount_ranges
-      end
+      def self.from_config(config) = new(ranges: config.amount_ranges)
 
       def rank(candidates, operation, _state)
         preferred = preferred_name(operation.amount)

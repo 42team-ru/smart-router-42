@@ -8,10 +8,12 @@ module Reporting
   #                              == 'selected'), а не эл. отсев -- нагрузка
   #                              на провайдера и наблюдаемая конверсия.
   module Distributions
-    def self.by_final(pairs, providers, weight)
+    def self.by_final(pairs, providers, weight, achievable = {})
       total = weight == :count ? pairs.size : pairs.sum { |operation, _| operation.amount }
 
-      providers.to_h { |provider| [provider.name, final_entry(pairs, provider, weight, total)] }
+      providers.to_h do |provider|
+        [provider.name, final_entry(pairs, provider, weight, total, achievable)]
+      end
     end
 
     def self.by_attempt(outcomes, providers)
@@ -28,20 +30,57 @@ module Reporting
               .each_with_object(Hash.new(0)) { |attempt, tally| tally[attempt.reason] += 1 }
     end
 
-    def self.final_entry(pairs, provider, weight, total)
+    def self.final_entry(pairs, provider, weight, total, achievable)
       part = weight_of(pairs, provider, weight)
       share_pct = percentage(part, total)
-      target_pct = (weight == :count ? provider.traffic_percentage : provider.volume_share_pct) || 0
 
-      {
-        (weight == :count ? 'count' : 'amount') => part,
-        'share_pct' => share_pct,
-        'target_pct' => target_pct,
-        'achievable_pct' => target_pct.to_f,
-        'deviation_pp' => (share_pct - target_pct).round(1)
-      }
+      { (weight == :count ? 'count' : 'amount') => part, 'share_pct' => share_pct }
+        .merge(targets(provider, weight, achievable, share_pct))
     end
     private_class_method :final_entry
+
+    def self.targets(provider, weight, achievable, share_pct)
+      target_pct = target_of(provider, weight)
+      achievable_pct = achievable_pct(provider, weight, achievable)
+
+      {
+        'target_pct' => target_pct,
+        'achievable_pct' => achievable_pct,
+        'deviation_pp' => (share_pct - (achievable_pct || target_pct)).round(1)
+      }
+    end
+    private_class_method :targets
+
+    # C-2 (docs/plans/PHASE_3_VOVA.md): volume_share_pct отсутствует в снапшоте
+    # организаторов, поэтому цель по объёму берётся из traffic_percentage -- тем
+    # же фоллбэком, что и Routing::Strategies::VolumeShare. Без него target_pct
+    # равен нулю, а deviation_pp вырождается в саму долю: quickpay показывал
+    # 64 п.п. отклонения там, где цели просто нет.
+    def self.target_of(provider, weight)
+      return provider.traffic_percentage.to_i if weight == :count
+
+      (provider.volume_share_pct || provider.traffic_percentage).to_i
+    end
+    private_class_method :target_of
+
+    # ARCHITECTURE.md:370 -- отклонение меряется ОТ ДОСТИЖИМОЙ доли, а не от
+    # паспортной. На десяти заявках доля квантуется шагом 10 п.п., в 35% попасть
+    # нельзя в принципе, и разница цель/достижимое -- арифметический пол, а не
+    # промах движка. Там, где достижимого нет (объём, spacepayments), меряем от
+    # цели: другой опоры просто нет.
+    # R-12: достижимую долю считает Routing::Achievable, и считает он места в
+    # очереди, а не деньги. Поэтому в volume_distribution поля нет -- null
+    # честнее копии цели. У spacepayments его тоже нет: fallback исключён из
+    # расчёта по допуску, а не по исходу.
+    def self.achievable_pct(provider, weight, achievable)
+      return nil unless weight == :count
+
+      entry = achievable[provider.name]
+      return nil if entry.nil?
+
+      (entry[:achievable_bp] / 100.0).round(1)
+    end
+    private_class_method :achievable_pct
 
     def self.weight_of(pairs, provider, weight)
       pairs.sum do |operation, outcome|
