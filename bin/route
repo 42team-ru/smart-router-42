@@ -23,6 +23,11 @@ require_relative '../lib/io/history_loader'
 require_relative '../lib/routing/planner'
 require_relative '../lib/routing/share_ledger'
 require_relative '../lib/routing/strategies/volume_share'
+require_relative '../lib/routing/strategies/priority'
+require_relative '../lib/routing/strategies/amount_range'
+require_relative '../lib/routing/strategies/conversion'
+require_relative '../lib/routing/strategies/load'
+require_relative '../lib/routing/strategies/obligations'
 require_relative '../lib/state/providers'
 require_relative '../lib/execution/executor'
 require_relative '../lib/execution/outcome_source/always_ok'
@@ -46,7 +51,8 @@ end
 
 def add_routing_options(opts, options)
   opts.on('--providers PATH', 'Снапшот провайдеров') { |path| options[:providers_path] = path }
-  opts.on('--strategy NAME', 'Стратегия ранжирования (count_share)') do |name|
+  opts.on('--strategy NAME',
+          "Стратегия ранжирования: #{Routing::Strategies.known.join(', ')}") do |name|
     options[:strategy] = name
   end
 end
@@ -179,12 +185,19 @@ def write_outputs(out_dir, pairs, providers, history, strategy)
   [decisions_path, report_path]
 end
 
+def build_strategy(name)
+  Routing::Strategies.build(name)
+rescue KeyError
+  fail_with("Неизвестная стратегия #{name.inspect}; " \
+            "допустимы #{Routing::Strategies.known.join(', ')}")
+end
+
 def load_inputs(options)
   {
     providers: load_providers(options[:providers_path]),
     operations: load_queue(options[:queue_path]),
     history: Io::HistoryLoader.load(HISTORY_PATH),
-    strategy: Routing::Strategies.build(options[:strategy])
+    strategy: build_strategy(options[:strategy])
   }
 end
 
