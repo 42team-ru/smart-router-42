@@ -7,7 +7,7 @@
 # Падает с exit 1, если найден источник случайности.
 set -euo pipefail
 
-DIRS=(lib/routing lib/execution)
+DIRS=(lib/routing lib/execution lib/offline)
 PATTERN='\b(rand|shuffle|sample)\b|Time\.now'
 LAYERS_DIR=lib/routing/layers
 LAYERS_PATTERN='\.to_f\b|Float\(|Math\.'

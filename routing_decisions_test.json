@@ -7,7 +7,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: vipay 4000/1=4000 против payflow 3500/1=3500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/1=4000 против payflow 3500/1=3500",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -30,7 +30,7 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: payflow 3500/1=3500 против quickpay 2500/1=2500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/1=3500 против quickpay 2500/1=2500",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -59,7 +59,8 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "1 допустимый провайдер из 3",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/1=2500, других допустимых нет",
+        "strategy": "count_share",
         "attempt_no": 1,
         "result": "expired"
       }
@@ -87,12 +88,13 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "1 допустимый провайдер из 3",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/3=833, других допустимых нет",
+        "strategy": "count_share",
         "attempt_no": 1,
-        "result": "rejected"
+        "result": "expired"
       }
     ],
-    "simulated_result": "rejected",
+    "simulated_result": "expired",
     "latency_sec": 29
   },
   {
@@ -109,7 +111,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: vipay 4000/3=1333 против quickpay 2500/3=833",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/3=1333 против quickpay 2500/5=500",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -120,7 +122,7 @@
   },
   {
     "operation_id": "op_106",
-    "selected_provider": "quickpay",
+    "selected_provider": "vipay",
     "attempts": [
       {
         "provider": "payflow",
@@ -129,17 +131,17 @@
         "details": "52000 > limit_amount_max 50000"
       },
       {
-        "provider": "quickpay",
+        "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: quickpay 2500/3=833 против vipay 4000/5=800",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/5=800 против quickpay 2500/5=500",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
       }
     ],
     "simulated_result": "approved",
-    "latency_sec": 29
+    "latency_sec": 38
   },
   {
     "operation_id": "op_107",
@@ -161,7 +163,8 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "1 допустимый провайдер из 3",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/3=1166, других допустимых нет",
+        "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
       }
@@ -189,7 +192,8 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "1 допустимый провайдер из 3",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/5=500, других допустимых нет",
+        "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
       }
@@ -211,7 +215,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: vipay 4000/5=800 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/7=571 против quickpay 2500/7=357",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -234,7 +238,7 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "count_share: payflow 3500/5=700 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/5=700 против quickpay 2500/7=357",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"

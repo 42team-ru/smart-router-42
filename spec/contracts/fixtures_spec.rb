@@ -226,8 +226,18 @@ RSpec.describe 'фикстуры контрактов (attempt/decisions/report)
       })
     end
 
-    it 'benchmark присутствует и допускает null в значениях' do
-      expect(report['benchmark'].values).to all(satisfy { |v| v.nil? || v.is_a?(Numeric) })
+    # rubocop:disable-next RSpec/ExampleLength, RSpec/MultipleExpectations
+    it 'benchmark имеет замороженную вложенную форму' do
+      benchmark = report['benchmark']
+      expect(benchmark.keys).to eq(%w[offline_bound our_online_result competitive_ratio note])
+      expect(benchmark['offline_bound']).to include(
+        'max_deviation_pp' => be_a(Float), 'delivered' => be_a(Integer)
+      )
+      expect(benchmark['our_online_result']).to include(
+        'max_deviation_pp' => be_a(Float), 'delivered' => be_a(Integer)
+      )
+      expect(benchmark['competitive_ratio']).to be_a(Float)
+      expect(benchmark['note']).to be_a(String).and(match(/\d/))
     end
 
     it 'deviation_causes присутствует' do

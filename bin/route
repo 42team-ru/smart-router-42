@@ -36,6 +36,9 @@ require_relative '../lib/execution/outcome_source/always_ok'
 require_relative '../lib/execution/outcome_source/deterministic'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
+require_relative '../lib/offline/objective'
+require_relative '../lib/offline/oracle'
+require_relative '../lib/offline/benchmark_block'
 
 # CFG-3: каталог стратегий загружается целиком. Новая стратегия — файл в
 # lib/routing/strategies/ плюс строка strategy: в конфиге; bin/route править не
@@ -191,13 +194,13 @@ end
 def build_pipeline(providers, options, strategy, selector, fallback_provider, layers,
                    config, history)
   state = State::Providers.new(providers)
+  outcomes = build_outcome_source(options, providers, config, history)
   {
     planner: Routing::Planner.new(providers: providers, strategy: strategy, selector: selector,
                                   fallback_provider: fallback_provider,
                                   layers: Routing::LayerStack.new(layers)),
-    executor: Execution::Executor.new(
-      outcomes: build_outcome_source(options, providers, config, history)
-    ),
+    executor: Execution::Executor.new(outcomes: outcomes),
+    outcomes: outcomes,
     state: state,
     ledger: state.shares,
     strategy: strategy
@@ -217,20 +220,38 @@ def build_pairs(operations, providers, options, inputs)
   pipeline = build_pipeline(providers, options, inputs[:strategy], inputs[:selector],
                             inputs[:config].fallback_provider, inputs[:layers],
                             inputs[:config], inputs[:history])
-  operations.map { |operation| route_operation(operation, pipeline) }
+  [operations.map { |operation| route_operation(operation, pipeline) }, pipeline[:outcomes]]
 end
 
-def write_outputs(out_dir, pairs, providers, history, strategy)
+# rubocop:disable-next Metrics/ParameterLists -- сформированные секции отчёта передаются явно.
+def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil)
   FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
 
   Reporting::DecisionsWriter.write(decisions_path, pairs)
   Reporting::ReportBuilder.write(
-    report_path, pairs, providers: providers, history: history, strategy: strategy.name
+    report_path, pairs, providers: providers, history: history, strategy: strategy.name,
+                        benchmark: benchmark
   )
 
   [decisions_path, report_path]
+end
+
+# rubocop:disable-next Metrics/MethodLength, Metrics/AbcSize
+def build_benchmark(pairs, inputs, outcomes, options)
+  online_assignment = Offline::Oracle.online_assignment(pairs)
+  ours = Offline::Objective.from_pairs(pairs, providers: inputs[:providers])
+  oracle = Offline::Oracle.new(
+    providers: inputs[:providers], operations: inputs[:operations], outcomes: outcomes,
+    fallback_provider: inputs[:config].fallback_provider, online_metrics: ours
+  )
+  bound = oracle.call(online_assignment)
+  Offline::BenchmarkBlock.build(
+    bound: bound.metrics, ours: ours, total: inputs[:operations].size,
+    seed: outcome_seed(options, inputs[:config]),
+    local_search_skipped: inputs[:operations].size > Offline::Oracle::LOCAL_SEARCH_MAX_OPS
+  )
 end
 
 # Config::SchemaError наследует RuntimeError: битый или отсутствующий конфиг
@@ -292,13 +313,16 @@ def load_inputs(options)
   }
 end
 
+# rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength
 def main(argv)
   options = parse_args(argv)
   inputs = load_inputs(options)
 
-  pairs = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
+  pairs, outcomes = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
+  benchmark = build_benchmark(pairs, inputs, outcomes, options)
   decisions_path, report_path = write_outputs(
-    options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy]
+    options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy],
+    benchmark: benchmark
   )
 
   puts "Прочитано операций: #{inputs[:operations].size}"

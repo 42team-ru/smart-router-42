@@ -163,12 +163,19 @@ RSpec.describe Reporting::ReportBuilder do
       )
     end
 
-    it 'заводит achievable_pct/benchmark/deviation_causes заглушками под заморозку формата Ф2' do
+    it 'заводит benchmark в замороженной форме' do
       expect(report['benchmark']).to eq(
-        'offline_optimum_deviation_pp' => nil, 'ours_deviation_pp' => nil,
-        'competitive_ratio' => nil
+        'offline_bound' => nil, 'our_online_result' => nil,
+        'competitive_ratio' => nil, 'note' => 'эталон не считался'
       )
       expect(report['deviation_causes']).to eq([])
+    end
+
+    it 'передаёт benchmark без изменений' do
+      benchmark = { 'offline_bound' => { 'max_deviation_pp' => 5.0, 'delivered' => 10 } }
+
+      expect(described_class.build(pairs, providers: providers, benchmark: benchmark)['benchmark'])
+        .to equal(benchmark)
     end
 
     it 'формирует параметрические recommendations по конверсии и дневному лимиту' do

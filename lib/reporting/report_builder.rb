@@ -21,18 +21,21 @@ module Reporting
   #
   # benchmark/deviation_causes остаются заглушками: это X-5 и A-7 из Ф5. Поля
   # заведены в структуре заранее -- формат отчёта после гейта Ф2 не меняется.
+  # rubocop:disable-next Metrics/ModuleLength -- отчёт собран в одном публичном фасаде.
   module ReportBuilder
     FALLBACK_PROVIDER = 'spacepayments'
 
-    def self.build(pairs, providers:, history: {}, strategy: nil)
+    def self.build(pairs, providers:, history: {}, strategy: nil, benchmark: nil)
       operations = pairs.map(&:first)
       outcomes = pairs.map(&:last)
 
-      header(operations, strategy).merge(sections(pairs, outcomes, providers, history))
+      header(operations, strategy).merge(sections(pairs, outcomes, providers, history, benchmark))
     end
 
-    def self.write(path, pairs, providers:, history: {}, strategy: nil)
-      report = build(pairs, providers: providers, history: history, strategy: strategy)
+    # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
+    def self.write(path, pairs, providers:, history: {}, strategy: nil, benchmark: nil)
+      report = build(pairs, providers: providers, history: history, strategy: strategy,
+                            benchmark: benchmark)
       File.write(path, "#{JSON.pretty_generate(report)}\n")
     end
 
@@ -45,9 +48,9 @@ module Reporting
     end
     private_class_method :header
 
-    def self.sections(pairs, outcomes, providers, history)
+    def self.sections(pairs, outcomes, providers, history, benchmark)
       distributions(pairs, outcomes, providers)
-        .merge(analytics(pairs, outcomes, providers, history))
+        .merge(analytics(pairs, outcomes, providers, history, benchmark))
     end
     private_class_method :sections
 
@@ -79,12 +82,12 @@ module Reporting
     end
     private_class_method :achievable_shares
 
-    def self.analytics(pairs, outcomes, providers, history)
+    def self.analytics(pairs, outcomes, providers, history, benchmark)
       {
         'skip_reasons' => Distributions.skip_reasons(outcomes),
         'projected_daily_utilization' => Utilization.projected_daily(pairs, providers),
         'fallback' => fallback(outcomes),
-        'benchmark' => benchmark,
+        'benchmark' => benchmark || self.benchmark,
         'deviation_causes' => [],
         'recommendations' => Recommendations.build(pairs, providers, history)
       }
@@ -147,9 +150,10 @@ module Reporting
 
     def self.benchmark
       {
-        'offline_optimum_deviation_pp' => nil,
-        'ours_deviation_pp' => nil,
-        'competitive_ratio' => nil
+        'offline_bound' => nil,
+        'our_online_result' => nil,
+        'competitive_ratio' => nil,
+        'note' => 'эталон не считался'
       }
     end
     private_class_method :benchmark

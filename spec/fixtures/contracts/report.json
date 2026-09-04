@@ -34,7 +34,7 @@
     "spacepayments_used": 0,
     "cascade_exhausted": 0
   },
-  "benchmark": {"offline_optimum_deviation_pp": null, "ours_deviation_pp": null, "competitive_ratio": null},
+  "benchmark": {"offline_bound": {"max_deviation_pp": 5.0, "delivered": 10}, "our_online_result": {"max_deviation_pp": 5.0, "delivered": 10}, "competitive_ratio": 1.0, "note": "эталон 42"},
   "deviation_causes": [
     "quickpay +5 п.п. к цели: op_103, op_104, op_108 не имели альтернатив по сумме и банку"
   ],

@@ -4,68 +4,68 @@
   "strategy": "count_share",
   "distribution": {
     "vipay": {
-      "count": 3,
-      "share_pct": 30.0,
+      "count": 4,
+      "share_pct": 40.0,
       "target_pct": 40,
       "achievable_pct": 40.0,
-      "deviation_pp": -10.0
+      "deviation_pp": 0.0
     },
     "payflow": {
       "count": 3,
       "share_pct": 30.0,
       "target_pct": 35,
-      "achievable_pct": 35.0,
-      "deviation_pp": -5.0
+      "achievable_pct": 30.0,
+      "deviation_pp": 0.0
     },
     "quickpay": {
-      "count": 4,
-      "share_pct": 40.0,
+      "count": 3,
+      "share_pct": 30.0,
       "target_pct": 25,
-      "achievable_pct": 25.0,
-      "deviation_pp": 15.0
+      "achievable_pct": 30.0,
+      "deviation_pp": 0.0
     },
     "spacepayments": {
       "count": 0,
       "share_pct": 0.0,
       "target_pct": 0,
-      "achievable_pct": 0.0,
+      "achievable_pct": null,
       "deviation_pp": 0.0
     }
   },
   "volume_distribution": {
     "vipay": {
-      "amount": 50000,
-      "share_pct": 13.0,
-      "target_pct": 0,
-      "achievable_pct": 0.0,
-      "deviation_pp": 13.0
+      "amount": 102000,
+      "share_pct": 26.4,
+      "target_pct": 40,
+      "achievable_pct": null,
+      "deviation_pp": -13.6
     },
     "payflow": {
       "amount": 88800,
       "share_pct": 23.0,
-      "target_pct": 0,
-      "achievable_pct": 0.0,
-      "deviation_pp": 23.0
+      "target_pct": 35,
+      "achievable_pct": null,
+      "deviation_pp": -12.0
     },
     "quickpay": {
-      "amount": 247000,
-      "share_pct": 64.0,
-      "target_pct": 0,
-      "achievable_pct": 0.0,
-      "deviation_pp": 64.0
+      "amount": 195000,
+      "share_pct": 50.5,
+      "target_pct": 25,
+      "achievable_pct": null,
+      "deviation_pp": 25.5
     },
     "spacepayments": {
       "amount": 0,
       "share_pct": 0.0,
       "target_pct": 0,
-      "achievable_pct": 0.0,
+      "achievable_pct": null,
       "deviation_pp": 0.0
     }
   },
   "attempt_distribution": {
     "vipay": {
-      "attempts": 3,
-      "successful": 3,
+      "attempts": 4,
+      "successful": 4,
       "observed_conversion": 1.0
     },
     "payflow": {
@@ -74,9 +74,9 @@
       "observed_conversion": 1.0
     },
     "quickpay": {
-      "attempts": 4,
-      "successful": 2,
-      "observed_conversion": 0.5
+      "attempts": 3,
+      "successful": 1,
+      "observed_conversion": 0.333
     },
     "spacepayments": {
       "attempts": 0,
@@ -91,9 +91,9 @@
   },
   "projected_daily_utilization": {
     "vipay": {
-      "used": 3250000,
+      "used": 3302000,
       "limit": 5000000,
-      "utilization_pct": 65.0
+      "utilization_pct": 66.0
     },
     "payflow": {
       "used": 2988800,
@@ -101,9 +101,9 @@
       "utilization_pct": 99.6
     },
     "quickpay": {
-      "used": 1194000,
+      "used": 1142000,
       "limit": 8000000,
-      "utilization_pct": 14.9
+      "utilization_pct": 14.3
     },
     "spacepayments": {
       "used": 0,
@@ -119,9 +119,16 @@
     "cascade_exhausted": 2
   },
   "benchmark": {
-    "offline_optimum_deviation_pp": null,
-    "ours_deviation_pp": null,
-    "competitive_ratio": null
+    "offline_bound": {
+      "max_deviation_pp": 5.0,
+      "delivered": 10
+    },
+    "our_online_result": {
+      "max_deviation_pp": 5.0,
+      "delivered": 10
+    },
+    "competitive_ratio": 1.0,
+    "note": "эталон эвристический: жадный старт и локальные улучшения с учётом порядка очереди, не доказанный оптимум; отклонение меряется от паспортных целей 40/35/25, а не от достижимых, поэтому не совпадает с distribution.deviation_pp; контрфактуалы посчитаны нашим симулятором (seed 42), а не генератором организаторов"
   },
   "deviation_causes": [],
   "recommendations": [
