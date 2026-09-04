@@ -5,22 +5,18 @@
 # правок кода. Флаг --strategy перекрывает ключ strategy; путь к самому файлу
 # меняется флагом --config.
 #
-# Влияют сегодня: strategy, amount_ranges (при strategy: amount_range),
-# fallback_provider, layers (только как проверка: непустой список — ошибка
-# запуска, слоёв ещё нет). Секции obligations и rate_limits схема валидирует, но
-# в поведение они не подключены: полей daily_turnover_min/max и
-# requests_per_minute_limit нет в reference/data/providers.json.
+# Влияют сегодня: strategy, strategy_selection, outcomes, amount_ranges (при
+# strategy: amount_range), fallback_provider и включённые слои. obligations и
+# rate_limits остаются параметрами будущего снапшота: на текущих данных CLI
+# однократно предупреждает, что нужных полей провайдеров нет.
 
 strategy: count_share
-layers: [] # слоёв ещё не существует (lib/routing/layers/), список намеренно пуст
+layers: [] # боевой выбор: ψ-слой меняет целевое распределение
 
 # Пороги целей для слоёв (lib/routing/layers). Инертны, пока layers пуст.
 goals:
   budget_headroom: { psi_threshold_micro: 100000 } # ψ = 0.100
   share_ceiling: { tolerance_bp: 0 }
-
-allocator:
-  tie_break: [weight_desc, name_asc]
 
 outcomes:
   source: deterministic

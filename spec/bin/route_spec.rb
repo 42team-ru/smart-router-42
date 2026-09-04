@@ -146,6 +146,18 @@ RSpec.describe 'bin/route' do
       decisions.each_with_object(Hash.new(0)) { |d, acc| acc[d['selected_provider']] += 1 }
     end
 
+    def config_with_replacements(dir, replacements)
+      source = File.read(production_config)
+      replacements.each do |line, replacement|
+        raise "строка #{line.inspect} исчезла из config/routing.yml" unless source.include?(line)
+
+        source = source.sub(line, replacement)
+      end
+      path = File.join(dir, 'routing.yml')
+      File.write(path, source)
+      path
+    end
+
     it 'берёт стратегию из YAML, когда --strategy не передан' do
       Dir.mktmpdir do |tmp|
         config = config_with(tmp, 'strategy: count_share', 'strategy: load')
@@ -153,7 +165,7 @@ RSpec.describe 'bin/route' do
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
 
         expect(status.exitstatus).to eq(0), stderr
-        expect(distribution(tmp)).to eq('quickpay' => 8, 'payflow' => 2)
+        expect(distribution(tmp)).to eq('quickpay' => 9, 'payflow' => 1)
       end
     end
 
@@ -199,6 +211,63 @@ RSpec.describe 'bin/route' do
         expect(status.exitstatus).to eq(1)
         expect(stderr).to include('no/such/file.yml')
         expect(stderr).not_to include('backtrace')
+      end
+    end
+
+    # rubocop:disable-next RSpec/ExampleLength, RSpec/MultipleExpectations -- проверяем оба источника исходов и их приоритет.
+    it 'читает outcomes.source из YAML, а CLI его перекрывает' do
+      Dir.mktmpdir do |tmp|
+        config = config_with(tmp, 'source: deterministic', 'source: always_ok')
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+        decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
+
+        expect(status.exitstatus).to eq(0), stderr
+        expect(decisions.map { |decision| decision['simulated_result'] }).to all(eq('approved'))
+
+        _stdout, stderr, status = run_route(
+          queue_path, '--out-dir', tmp, '--config', config, '--outcomes', 'deterministic'
+        )
+        overridden = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
+
+        expect(status.exitstatus).to eq(0), stderr
+        results = overridden.map { |decision| decision['simulated_result'] }
+        expect(results).to include('rejected').or include('expired')
+      end
+    end
+
+    # rubocop:disable-next RSpec/ExampleLength, RSpec/MultipleExpectations -- сравниваются независимые настройки YAML и CLI.
+    it 'читает seed и calibrate_from_history из YAML, CLI перекрывает seed' do
+      Dir.mktmpdir do |tmp|
+        baseline = config_with_replacements(tmp, {})
+
+        run_route(queue_path, '--out-dir', tmp, '--config', baseline)
+        baseline_output = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+        seed = config_with_replacements(tmp, 'seed: 42' => 'seed: 777')
+        run_route(queue_path, '--out-dir', tmp, '--config', seed)
+        seeded_output = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+        run_route(queue_path, '--out-dir', tmp, '--config', seed, '--seed', '42')
+        overridden_output = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+        uncalibrated = config_with_replacements(
+          tmp, 'calibrate_from_history: true' => 'calibrate_from_history: false'
+        )
+        run_route(queue_path, '--out-dir', tmp, '--config', uncalibrated)
+        uncalibrated_output = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+
+        expect(seeded_output).not_to eq(baseline_output)
+        expect(overridden_output).to eq(baseline_output)
+        expect(uncalibrated_output).not_to eq(baseline_output)
+      end
+    end
+
+    it 'один раз предупреждает о неподдерживаемых полях rate_limits и obligations' do
+      Dir.mktmpdir do |tmp|
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
+
+        expect(status.exitstatus).to eq(0)
+        expect(stderr).to include('rate_limits заданы для quickpay, vipay',
+                                  'requests_per_minute_limit')
+        expect(stderr).to include('obligations заданы для payflow, vipay',
+                                  'daily_turnover_min/daily_turnover_max')
       end
     end
   end

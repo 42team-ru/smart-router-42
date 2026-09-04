@@ -20,8 +20,7 @@ RSpec.describe Routing::Assembly do
 
   def cfg(strategy: 'count_share', layers: [], amount_ranges: [])
     Config::RoutingConfig.new(
-      strategy: strategy, layers: layers, goals: {}, strategy_selection: {},
-      allocator: {}, outcomes: {},
+      strategy: strategy, layers: layers, goals: {}, strategy_selection: {}, outcomes: {},
       amount_ranges: amount_ranges, obligations: {}, rate_limits: {},
       fallback_provider: 'spacepayments'
     )
@@ -99,7 +98,7 @@ RSpec.describe Routing::Assembly do
 
   describe Routing::Layers do
     it 'реестр содержит первый слой Ф4' do
-      expect(described_class.known).to eq(['budget_headroom'])
+      expect(described_class.known).to eq(%w[budget_headroom share_ceiling])
     end
 
     it 'не подхватывает одноимённую стратегию: реестры раздельные' do

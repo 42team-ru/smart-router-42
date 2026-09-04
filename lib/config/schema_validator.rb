@@ -11,7 +11,7 @@ module Config
     # Новый top-level ключ конфига (например `selector` в Ф4, docs/TASKS.md X-3) —
     # добавить сюда одной строкой. Без этого валидатор отвергнет его как опечатку.
     KNOWN_TOP_LEVEL_KEYS = %w[
-      strategy layers goals strategy_selection allocator outcomes
+      strategy layers goals strategy_selection outcomes
       amount_ranges obligations rate_limits fallback_provider
     ].freeze
 
@@ -55,7 +55,6 @@ module Config
       SchemaRules.validate_rate_limits!(raw['rate_limits'])
       validate_hash!(raw['goals'], 'goals')
       validate_hash!(raw['strategy_selection'], 'strategy_selection')
-      validate_hash!(raw['allocator'], 'allocator')
       validate_hash!(raw['outcomes'], 'outcomes')
     end
 

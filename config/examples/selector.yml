@@ -1,11 +1,19 @@
-# BALANCE (AdWords) demonstration: keep budget_headroom ahead of the base strategy.
-# The production configuration deliberately keeps layers empty.
 strategy: count_share
-layers: [budget_headroom, share_ceiling]
+layers: []
 
 goals:
   budget_headroom: { psi_threshold_micro: 100000 }
   share_ceiling: { tolerance_bp: 0 }
+
+strategy_selection:
+  default: count_share
+  rules:
+    - when: { amount_gte: 40000 }
+      use: load
+      why: "крупная операция направляется к менее загруженному провайдеру"
+    - when: { eligible_count_lte: 1 }
+      use: priority
+      why: "выбора нет, каскад тривиален"
 
 outcomes:
   source: deterministic

@@ -70,7 +70,7 @@ module Routing
       end
 
       def no_reordering_details(minimum)
-        "#{name}: без перестановки, минимальный psi #{format_micro(minimum)} >= " \
+        "#{name}: без перестановки, минимальный psi #{format_micro(minimum)}; " \
           "порог #{format_micro(psi_threshold_micro)}"
       end
 

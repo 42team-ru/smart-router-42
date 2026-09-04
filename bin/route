@@ -94,7 +94,7 @@ def default_options
   # strategy здесь намеренно нет: имя стратегии приходит из конфига, а
   # options[:strategy] остаётся nil, пока не передан --strategy.
   { out_dir: 'out', providers_path: 'reference/data/providers.json',
-    config_path: 'config/routing.yml', outcomes: 'deterministic', seed: '42' }
+    config_path: 'config/routing.yml', outcomes: nil, seed: nil }
 end
 
 def parse_args(argv)
@@ -123,16 +123,33 @@ rescue RuntimeError => e
   fail_with(e.message)
 end
 
-def build_outcome_source(options, providers)
-  case options[:outcomes]
+# rubocop:disable-next Metrics/MethodLength -- выбор источника и приоритет значений конфигурации видны вместе.
+def build_outcome_source(options, providers, config, history)
+  case outcome_source_name(options, config)
   when 'always_ok' then Execution::OutcomeSource::AlwaysOk.new
   when 'deterministic'
-    conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
-    Execution::OutcomeSource::Deterministic.new(seed: options[:seed], conversions: conversions)
+    Execution::OutcomeSource::Deterministic.new(
+      seed: outcome_seed(options, config),
+      conversions: outcome_conversions(config, providers, history)
+    )
   else
-    fail_with("Неизвестный источник исходов #{options[:outcomes].inspect}; " \
+    fail_with("Неизвестный источник исходов #{outcome_source_name(options, config).inspect}; " \
               'допустимы deterministic, always_ok')
   end
+end
+
+def outcome_source_name(options, config)
+  options[:outcomes] || config.outcomes.fetch('source', 'deterministic')
+end
+
+def outcome_seed(options, config)
+  options[:seed] || config.outcomes.fetch('seed', '42')
+end
+
+def outcome_conversions(config, providers, history)
+  return history if config.outcomes.fetch('calibrate_from_history', false)
+
+  providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
 end
 
 def first_ranked_attempt?(attempt, plan)
@@ -141,12 +158,16 @@ end
 
 def rebuild_attempt(attempt, plan, operation, strategy, ledger)
   provider_name = attempt.provider.respond_to?(:name) ? attempt.provider.name : attempt.provider
-  return attempt.with(provider: provider_name) unless first_ranked_attempt?(attempt, plan)
+  return attempt.with(provider: provider_name) unless first_selected_attempt?(attempt, plan)
 
-  attempt.with(
-    provider: provider_name, reason: 'best_target_adherence',
-    details: attempt_details(plan, operation, strategy, ledger), strategy: plan.trace.strategy_name
-  )
+  details = attempt_details(plan, operation, strategy, ledger)
+  attributes = { provider: provider_name, details: details, strategy: plan.trace.strategy_name }
+  attributes[:reason] = 'best_target_adherence' if first_ranked_attempt?(attempt, plan)
+  attempt.with(**attributes)
+end
+
+def first_selected_attempt?(attempt, plan)
+  attempt.decision == 'selected' && attempt.attempt_no == 1 && !plan.trace.nil?
 end
 
 def attempt_details(plan, operation, strategy, ledger)
@@ -166,13 +187,17 @@ def explain_first_attempt(outcome, plan, operation, strategy, ledger)
   outcome.with(attempts: attempts)
 end
 
-def build_pipeline(providers, options, strategy, fallback_provider, layers)
+# rubocop:disable-next Metrics/ParameterLists, Metrics/MethodLength -- части пайплайна приходят из независимых источников.
+def build_pipeline(providers, options, strategy, selector, fallback_provider, layers,
+                   config, history)
   state = State::Providers.new(providers)
   {
-    planner: Routing::Planner.new(providers: providers, strategy: strategy,
+    planner: Routing::Planner.new(providers: providers, strategy: strategy, selector: selector,
                                   fallback_provider: fallback_provider,
                                   layers: Routing::LayerStack.new(layers)),
-    executor: Execution::Executor.new(outcomes: build_outcome_source(options, providers)),
+    executor: Execution::Executor.new(
+      outcomes: build_outcome_source(options, providers, config, history)
+    ),
     state: state,
     ledger: state.shares,
     strategy: strategy
@@ -189,8 +214,9 @@ def route_operation(operation, pipeline)
 end
 
 def build_pairs(operations, providers, options, inputs)
-  pipeline = build_pipeline(providers, options, inputs[:strategy],
-                            inputs[:config].fallback_provider, inputs[:layers])
+  pipeline = build_pipeline(providers, options, inputs[:strategy], inputs[:selector],
+                            inputs[:config].fallback_provider, inputs[:layers],
+                            inputs[:config], inputs[:history])
   operations.map { |operation| route_operation(operation, pipeline) }
 end
 
@@ -229,15 +255,40 @@ rescue KeyError => e
   fail_with(e.message)
 end
 
+def build_selector(config, override)
+  Routing::Assembly.selector(config: config, override: override)
+rescue KeyError, ArgumentError => e
+  fail_with(e.message)
+end
+
+def warn_unapplied_config(config, providers)
+  warn_missing_provider_field(config.rate_limits, providers, :requests_per_minute_limit,
+                              'rate_limits', 'requests_per_minute_limit')
+  warn_missing_provider_field(config.obligations, providers, :daily_turnover_min,
+                              'obligations', 'daily_turnover_min/daily_turnover_max')
+end
+
+def warn_missing_provider_field(rules, providers, field, key, snapshot_field)
+  return if rules.empty? || providers.any? { |provider| !provider.public_send(field).nil? }
+
+  names = rules.keys.sort.join(', ')
+  warn "конфиг: #{key} заданы для #{names} — в снапшоте провайдеров нет поля " \
+       "#{snapshot_field}, правило не применяется"
+end
+
+# rubocop:disable-next Metrics/MethodLength -- загрузка входов и предупреждения делаются единожды до цикла очереди.
 def load_inputs(options)
   config = load_config(options[:config_path])
+  providers = load_providers(options[:providers_path])
+  warn_unapplied_config(config, providers)
   {
-    providers: load_providers(options[:providers_path]),
+    providers: providers,
     operations: load_queue(options[:queue_path]),
     history: Io::HistoryLoader.load(HISTORY_PATH),
     config: config,
     layers: build_layers(config),
-    strategy: build_strategy(config, options[:strategy])
+    strategy: build_strategy(config, options[:strategy]),
+    selector: build_selector(config, options[:strategy])
   }
 end
 

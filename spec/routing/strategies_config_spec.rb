@@ -18,8 +18,7 @@ RSpec.describe Routing::Strategies do
   # Полный набор ключей Config::RoutingConfig: Data требует все десять.
   def config(strategy: 'count_share', amount_ranges: [], layers: [])
     Config::RoutingConfig.new(
-      strategy: strategy, layers: layers, goals: {}, strategy_selection: {},
-      allocator: {}, outcomes: {},
+      strategy: strategy, layers: layers, goals: {}, strategy_selection: {}, outcomes: {},
       amount_ranges: amount_ranges, obligations: {}, rate_limits: {},
       fallback_provider: 'spacepayments'
     )

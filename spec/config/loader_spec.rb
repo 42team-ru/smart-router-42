@@ -26,10 +26,10 @@ RSpec.describe Config::Loader do
     subject(:config) { described_class.load(fixture_path('config', 'minimal.yml')) }
 
     it 'подставляет дефолты на отсутствующие опциональные ключи' do
-      defaults = [config.layers, config.allocator, config.outcomes,
+      defaults = [config.layers, config.outcomes,
                   config.amount_ranges, config.obligations, config.rate_limits]
 
-      expect(defaults).to eq([[], {}, {}, [], {}, {}])
+      expect(defaults).to eq([[], {}, [], {}, {}])
     end
   end
 

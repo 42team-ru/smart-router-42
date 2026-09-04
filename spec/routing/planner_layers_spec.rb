@@ -46,7 +46,9 @@ RSpec.describe Routing::Planner do
 
     expect(plan.candidates.map(&:name)).to eq(%w[payflow vipay])
     expect(plan.trace).to have_attributes(
-      strategy_name: 'test_strategy', segments: ['test_strategy: 2 candidates', 'test_layer: 0']
+      strategy_name: 'test_strategy',
+      segments: ['selector: статический выбор (1 стратегия) -> test_strategy',
+                 'test_strategy: 2 candidates', 'test_layer: 0']
     )
   end
 

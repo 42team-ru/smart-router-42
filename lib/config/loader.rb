@@ -14,7 +14,7 @@ module Config
   # один SchemaError на вызов, как остальные загрузчики в lib/io/.
   module Loader
     OPTIONAL_DEFAULTS = {
-      layers: [], goals: {}, strategy_selection: {}, allocator: {}, outcomes: {},
+      layers: [], goals: {}, strategy_selection: {}, outcomes: {},
       amount_ranges: [], obligations: {}, rate_limits: {}
     }.freeze
 

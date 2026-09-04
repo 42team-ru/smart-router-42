@@ -1,9 +1,6 @@
 strategy: count_share
 layers: [conversion, load]
 
-allocator:
-  tie_break: [weight_desc, name_asc]
-
 outcomes:
   source: deterministic
   seed: 42

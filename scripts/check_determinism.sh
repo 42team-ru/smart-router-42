@@ -9,6 +9,8 @@ set -euo pipefail
 
 DIRS=(lib/routing lib/execution)
 PATTERN='\b(rand|shuffle|sample)\b|Time\.now'
+LAYERS_DIR=lib/routing/layers
+LAYERS_PATTERN='\.to_f\b|Float\(|Math\.'
 
 for dir in "${DIRS[@]}"; do
   if [ ! -d "$dir" ]; then
@@ -17,6 +19,11 @@ for dir in "${DIRS[@]}"; do
   fi
 done
 
+if [ ! -d "$LAYERS_DIR" ]; then
+  echo "отсутствует каталог $LAYERS_DIR"
+  exit 2
+fi
+
 found=0
 for dir in "${DIRS[@]}"; do
   if matches=$(grep -rnE "$PATTERN" -- "$dir"); then
@@ -24,6 +31,11 @@ for dir in "${DIRS[@]}"; do
     found=1
   fi
 done
+
+if matches=$(grep -rnE "$LAYERS_PATTERN" -- "$LAYERS_DIR"); then
+  echo "$matches"
+  found=1
+fi
 
 if [ "$found" -eq 1 ]; then
   exit 1

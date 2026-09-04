@@ -67,9 +67,6 @@ bundle exec bin/route <queue.json> [--out-dir DIR] [--providers PATH]
 strategy: count_share
 layers: []
 
-allocator:
-  tie_break: [weight_desc, name_asc]
-
 outcomes:
   source: deterministic
   seed: 42
@@ -95,25 +92,46 @@ fallback_provider: spacepayments
 `Config::RoutingConfig` в `Routing::Assembly`. Ни `Planner`, ни стратегии, ни
 `Executor` файловой системы не касаются.
 
-Схему всех восьми ключей валидирует `Config::Loader` (`lib/config/loader.rb`);
+Схему ключей валидирует `Config::Loader` (`lib/config/loader.rb`);
 битый конфиг даёт сообщение и код выхода 1, а не трейс. Валидность схемы и
 влияние на поведение — разные вещи, поэтому таблица ниже честно разделяет их.
 
 | Ключ | Что делает | Влияет сегодня |
 |---|---|---|
 | `strategy` | активная стратегия ранжирования каскада | **да** |
-| `layers` | слои-модификаторы поверх стратегии | нет: реестр `Routing::Layers` пуст. `layers: []` — штатно; любой непустой список роняет запуск с кодом 1. Слои приезжают в Ф4 (X-1, X-2) |
+| `layers` | лексикографические мягкие модификаторы поверх стратегии | **да**, если перечислены `budget_headroom` и/или `share_ceiling`; боевой конфиг оставляет `[]` |
+| `goals` | пороги слоёв | **да**, когда соответствующий слой включён |
+| `strategy_selection` | правила выбора стратегии для текущей операции | **да**, если содержит непустой `rules` |
 | `amount_ranges` | полосы суммы для стратегии `amount_range` | **да**, когда `strategy: amount_range` |
 | `fallback_provider` | провайдер последней надежды (fallback по допуску) | **да**: имя уходит в `Routing::Planner` |
-| `allocator.tie_break` | описывает порядок разрешения ничьих | нет: отдельно не читается. Стратегии разрешают ничьи по весу, затем по имени — это записано в их коде, а не берётся из YAML |
-| `outcomes.source`, `outcomes.seed` | источник симулированных исходов и seed | нет: значения продублированы дефолтами CLI (`--outcomes deterministic --seed 42`) и совпадают с ними. Управляются флагами |
-| `outcomes.calibrate_from_history` | калибровка конверсий по `operations_history.csv` | нет: `Strategies::Conversion` калибруется по истории всегда, ключ не читается |
-| `obligations` | целевые дневные обороты провайдеров | нет: полей `daily_turnover_min` / `daily_turnover_max` нет в `reference/data/providers.json`, загрузчик даёт `nil`. Схема валидируется, поведение не подключено |
-| `rate_limits` | ограничение интенсивности (запросов в минуту) | нет: поля `requests_per_minute_limit` нет в `providers.json`, `Constraints::RateLimit` на реальном снапшоте — no-op |
+| `outcomes.source`, `outcomes.seed` | источник симулированных исходов и seed | **да**; CLI-флаги сильнее YAML |
+| `outcomes.calibrate_from_history` | брать конверсии исходов из `operations_history.csv` | **да** |
+| `obligations` | целевые дневные обороты провайдеров | на public-снапшоте не применяются; CLI один раз печатает предупреждение о недостающих полях |
+| `rate_limits` | ограничение интенсивности (запросов в минуту) | на public-снапшоте не применяются; CLI один раз печатает предупреждение о недостающем поле |
 
 Следствие для `obligations`: стратегия `obligations` на публичном снапшоте
 вырождается — у всех провайдеров `min`/`max` равны `nil`, и порядок
 определяется именем. Это известное ограничение данных, а не скрытая логика.
+
+### Слои и селектор
+
+Слои не расширяют множество допущенных: они только переупорядочивают его по кортежу
+отклонений, где первый в списке слой старше. `budget_headroom` использует
+`ψ = 1 − exp(−(1 − approved / limit))`; чем меньше ψ, тем ближе провайдер к дневному
+лимиту. Это BALANCE-подход из [Mehta et al., *AdWords and Generalized Online Matching*,
+FOCS 2005](https://doi.org/10.1109/FOCS.2005.21).
+
+Боевой конфиг намеренно содержит `layers: []`: включение ψ меняет целевое распределение,
+и решение о такой политике должен принять человек. Примеры можно запустить отдельно:
+
+```sh
+bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/adwords.yml --out-dir /tmp/adwords
+bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/goals_reversed.yml --out-dir /tmp/goals-reversed
+bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/selector.yml --out-dir /tmp/selector
+```
+
+Последний пример выбирает стратегию на текущей операции правилами `amount_gte`, `amount_lt`,
+`bank_in` и `eligible_count_lte`; ML в этом процессе не используется.
 
 ## 5. Приоритет источников
 
@@ -147,8 +165,8 @@ bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/load
 
 | Строка в конфиге | payflow | quickpay | vipay |
 |---|---|---|---|
-| `strategy: count_share` (как в репозитории) | 3 | 4 | 3 |
-| `strategy: load` | 2 | 8 | 0 |
+| `strategy: count_share` (как в репозитории) | 3 | 3 | 4 |
+| `strategy: load` | 1 | 9 | 0 |
 
 Числа измерены на `reference/data/operations_queue_10.json` с дефолтами
 `bin/route` (`--outcomes deterministic --seed 42`). Валидатор организаторов на
@@ -159,11 +177,11 @@ bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/load
 
 | `strategy` | payflow | quickpay | vipay |
 |---|---|---|---|
-| `amount_range` | 4 | 3 | 3 |
-| `conversion` | 2 | 4 | 4 |
-| `count_share` | 3 | 4 | 3 |
-| `load` | 2 | 8 | 0 |
-| `obligations` | 4 | 6 | 0 |
+| `amount_range` | 3 | 4 | 3 |
+| `conversion` | 1 | 5 | 4 |
+| `count_share` | 3 | 3 | 4 |
+| `load` | 1 | 9 | 0 |
+| `obligations` | 3 | 7 | 0 |
 | `priority` | 3 | 3 | 4 |
 | `volume_share` | 3 | 3 | 4 |
 

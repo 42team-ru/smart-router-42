@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative 'layers'
+require_relative 'selector'
 require_relative 'strategies'
 
 module Routing
@@ -32,6 +33,24 @@ module Routing
         config.layers.map { |name| Layers.build(name, config: config) }
       end
 
+      # rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength -- три чётких режима источника стратегии.
+      def selector(config:, override: nil)
+        return cli_selector(config, override) if override && !override.to_s.empty?
+
+        selection = config.strategy_selection
+        return Selector::Static.new(strategy(config: config)) if selection.nil? || selection.empty?
+
+        default_name = selection.fetch('default', config.strategy)
+        default = build_named_strategy(default_name, config, 'strategy_selection.default')
+        rules = selection.fetch('rules', [])
+        return Selector::Static.new(default) if rules.empty?
+
+        built_rules = rules.each_with_index.map do |rule, index|
+          Selector::Rules::Rule.from_config(rule, index: index + 1, config: config)
+        end
+        Selector::Rules.new(default: default, rules: built_rules)
+      end
+
       private
 
       def unknown_message(name, source)
@@ -43,6 +62,21 @@ module Routing
         return [override, CLI_SOURCE] if override && !override.to_s.empty?
 
         [config.strategy, CONFIG_SOURCE]
+      end
+
+      def cli_selector(config, override)
+        selected = strategy(config: config, override: override)
+        details = "selector: отключён флагом --strategy (1 источник) -> #{selected.name}"
+        Selector::Static.new(selected, details: details)
+      end
+
+      def build_named_strategy(name, config, source)
+        unless Strategies.known.include?(name.to_s)
+          raise KeyError, "Неизвестная стратегия #{name.inspect} (источник: #{source}); " \
+                          "допустимы: #{Strategies.known.join(', ')}"
+        end
+
+        Strategies.build(name, config: config)
       end
     end
   end

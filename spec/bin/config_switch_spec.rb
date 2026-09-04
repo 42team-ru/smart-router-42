@@ -30,8 +30,8 @@ RSpec.describe 'переключение поведения конфигом' do
   # Строки боевого YAML, которые подменяются, и измеренные распределения.
   def strategy_line = 'strategy: count_share'
   def payflow_band = '  - { from: 500, to: 50000, prefer: payflow }'
-  def count_share_split = { 'vipay' => 3, 'payflow' => 3, 'quickpay' => 4 }
-  def load_split = { 'payflow' => 2, 'quickpay' => 8 }
+  def count_share_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
+  def load_split = { 'payflow' => 1, 'quickpay' => 9 }
   def band_payflow_split = { 'vipay' => 3, 'payflow' => 3, 'quickpay' => 4 }
   def band_vipay_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
 
@@ -69,7 +69,7 @@ RSpec.describe 'переключение поведения конфигом' do
   def op101(decisions) = decisions.find { |d| d['operation_id'] == 'op_101' }
 
   describe 'сценарий 1: строка strategy' do
-    it 'strategy: count_share даёт 3/3/4' do
+    it 'strategy: count_share даёт 4/3/3' do
       Dir.mktmpdir do |tmp|
         decisions = decisions_for(tmp, { strategy_line => strategy_line })
 
@@ -77,7 +77,7 @@ RSpec.describe 'переключение поведения конфигом' do
       end
     end
 
-    it 'strategy: load даёт 0/2/8 — распределение изменила одна строка YAML' do
+    it 'strategy: load даёт 0/1/9 — распределение изменила одна строка YAML' do
       Dir.mktmpdir do |tmp|
         decisions = decisions_for(tmp, { strategy_line => 'strategy: load' })
 
