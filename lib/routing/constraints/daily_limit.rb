@@ -10,20 +10,32 @@ module Routing
     class DailyLimit < Base
       REASON = 'daily_limit_exceeded'
 
-      def self.violation(provider, operation, _state)
+      def self.violation(provider, operation, state)
         limit = provider.daily_amount_limit
         return nil if limit.nil?
 
-        approved = provider.daily_approved_amount || 0
+        approved = approved_amount(provider, state)
         return nil if approved + operation.amount <= limit
 
         Violation.new(
           reason: REASON,
-          details: Details.sum_over(
-            'daily_approved_amount', approved, operation.amount, 'daily_amount_limit', limit
-          )
+          details: limit_details(approved, operation.amount, limit)
         )
       end
+
+      def self.approved_amount(provider, state)
+        if state.respond_to?(:daily_approved_amount)
+          return state.daily_approved_amount(provider.name)
+        end
+
+        provider.daily_approved_amount.to_i
+      end
+      private_class_method :approved_amount
+
+      def self.limit_details(approved, amount, limit)
+        Details.sum_over('daily_approved_amount', approved, amount, 'daily_amount_limit', limit)
+      end
+      private_class_method :limit_details
     end
   end
 end

@@ -32,7 +32,7 @@ RSpec.describe 'переключение поведения конфигом' do
   def payflow_band = '  - { from: 500, to: 50000, prefer: payflow }'
   def count_share_split = { 'vipay' => 3, 'payflow' => 3, 'quickpay' => 4 }
   def load_split = { 'payflow' => 2, 'quickpay' => 8 }
-  def band_payflow_split = { 'vipay' => 3, 'payflow' => 4, 'quickpay' => 3 }
+  def band_payflow_split = { 'vipay' => 3, 'payflow' => 3, 'quickpay' => 4 }
   def band_vipay_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
 
   let(:bin_route) { File.expand_path('../../bin/route', __dir__) }

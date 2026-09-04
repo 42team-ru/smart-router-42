@@ -2,6 +2,7 @@
 
 require 'routing/constraints/daily_limit'
 require 'routing/reasons'
+require 'state/providers'
 require_relative '../../support/provider_factory'
 
 RSpec.describe Routing::Constraints::DailyLimit do
@@ -51,5 +52,23 @@ RSpec.describe Routing::Constraints::DailyLimit do
     result = described_class.violation(payflow, build_operation(amount: 150_000), nil)
 
     expect(result).to have_attributes(payflow_violation)
+  end
+
+  # rubocop:disable-next RSpec/ExampleLength -- проверяет причину и числа из живого State
+  it 'берёт одобренную сумму из живого состояния, а не из снимка' do
+    operation = build_operation(amount: 150_000)
+
+    result = described_class.violation(payflow, operation, state_with_approved_payflow)
+
+    expect(result).to have_attributes(
+      reason: 'daily_limit_exceeded',
+      details: 'daily_approved_amount 2950000 + 150000 = 3100000 > daily_amount_limit 3000000'
+    )
+  end
+
+  def state_with_approved_payflow
+    state = State::Providers.new([payflow, build_provider(payment_system: 'spacepayments')])
+    previous = build_operation(operation_id: 'op_previous', amount: 50_000)
+    state.reserve(payflow, previous).commit(payflow, previous)
   end
 end

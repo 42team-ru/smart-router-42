@@ -172,7 +172,7 @@ def build_pipeline(providers, options, strategy, fallback_provider)
 end
 
 def route_operation(operation, pipeline)
-  plan = pipeline[:planner].plan(operation, pipeline[:ledger])
+  plan = pipeline[:planner].plan(operation, pipeline[:state])
   outcome = pipeline[:executor].run(plan, operation, pipeline[:state])
   explained = explain_first_attempt(
     outcome, plan, operation, pipeline[:strategy], pipeline[:ledger]

@@ -3,6 +3,7 @@
 require 'json'
 require 'routing/planner'
 require 'routing/share_ledger'
+require 'state/providers'
 require_relative '../support/provider_factory'
 
 # rubocop:disable-next RSpec/MultipleExpectations, RSpec/ExampleLength
@@ -60,6 +61,24 @@ RSpec.describe Routing::Planner do
 
     expect(planner.plan(operations.first, ledger).candidates.map(&:name)).to eq(
       %w[vipay payflow quickpay]
+    )
+  end
+
+  it 'исключает провайдера, когда живое состояние добивает дневной лимит' do
+    payflow = build_provider(payment_system: 'payflow', daily_approved_amount: 2_900_000,
+                             daily_amount_limit: 3_000_000)
+    fallback = build_provider(payment_system: 'spacepayments')
+    state = State::Providers.new([payflow, fallback])
+    previous = build_operation(operation_id: 'op_previous', amount: 50_000)
+    operation = build_operation(operation_id: 'op_after_limit', amount: 100_000)
+    state.reserve(payflow, previous)
+    state.commit(payflow, previous)
+
+    plan = described_class.new(providers: [payflow, fallback]).plan(operation, state)
+
+    expect(plan.candidates).to be_empty
+    expect(plan.skipped.map { |provider, violation| [provider.name, violation.reason] }).to eq(
+      [%w[payflow daily_limit_exceeded]]
     )
   end
 
