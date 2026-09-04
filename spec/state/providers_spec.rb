@@ -82,11 +82,12 @@ RSpec.describe State::Providers do
         .to raise_error(ArgumentError, /reserve already held/)
     end
 
-    it 'reserve после hold той же пары проходит (для PendingResolver)' do
+    it 'reserve после hold той же пары падает (закрывать через resolve_hold)' do
       state.reserve(vipay, operation)
       state.hold(vipay, operation)
 
-      expect { state.reserve(vipay, operation) }.not_to raise_error
+      expect { state.reserve(vipay, operation) }
+        .to raise_error(ArgumentError, /reserve already held/)
     end
   end
 
@@ -115,6 +116,66 @@ RSpec.describe State::Providers do
       snap[:in_progress_count] = 999
 
       expect(state.in_progress_count('vipay')).to eq(4)
+    end
+  end
+
+  describe 'роль ShareCounters (интеграция с Routing::ShareLedger)' do
+    subject(:ledger_state) do
+      described_class.new([build_provider('vipay'), build_spacepayments])
+    end
+
+    require 'support/shared/share_counters'
+    it_behaves_like 'счётчики долей'
+  end
+
+  describe '#resolve_hold' do
+    before do
+      state.reserve(vipay, operation)
+      state.hold(vipay, operation)
+    end
+
+    it ':approved — in_progress откачен, daily_approved += amount, доля держится' do
+      state.resolve_hold(vipay, operation, :approved)
+
+      expect(state.in_progress_count('vipay')).to eq(4)
+      expect(state.in_progress_amount('vipay')).to eq(380_000)
+      expect(state.daily_approved_amount('vipay')).to eq(3_210_000)
+      expect(state.count_units('vipay')).to eq(1)
+      expect(state.open_reservations).to eq(0)
+    end
+
+    it ':rejected — in_progress откачен, daily не тронут, доля возвращается' do
+      state.resolve_hold(vipay, operation, :rejected)
+
+      expect(state.in_progress_count('vipay')).to eq(4)
+      expect(state.in_progress_amount('vipay')).to eq(380_000)
+      expect(state.daily_approved_amount('vipay')).to eq(3_200_000)
+      expect(state.count_units('vipay')).to eq(0)
+      expect(state.open_reservations).to eq(0)
+    end
+
+    it 'без предварительного hold — ArgumentError' do
+      other = build_operation(id: 'op_999', amount: 5_000)
+
+      expect { state.resolve_hold(vipay, other, :approved) }
+        .to raise_error(ArgumentError, /no held reservation/)
+    end
+
+    it 'actual не в {:approved,:rejected} — ArgumentError' do
+      expect { state.resolve_hold(vipay, operation, :expired) }
+        .to raise_error(ArgumentError, /must be :approved or :rejected/)
+    end
+
+    it 'не задевает счётчики чужого провайдера (прошлые решения не пересчитываются)' do
+      other_op = build_operation(id: 'op_202', amount: 20_000)
+      state.reserve(payflow, other_op)
+      state.commit(payflow, other_op)
+
+      state.resolve_hold(vipay, operation, :approved)
+
+      expect(state.in_progress_count('payflow')).to eq(0)
+      expect(state.daily_approved_amount('payflow')).to eq(20_000)
+      expect(state.count_units('payflow')).to eq(1)
     end
   end
 end

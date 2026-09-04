@@ -1,28 +1,39 @@
 # frozen_string_literal: true
 
+require_relative '../routing/share_ledger'
+
 module State
   # Счётчики провайдеров. Резерв, а не пост-фактум: счётчики закрепляются
   # за провайдером в момент попадания в каскад.
   #
-  #   исход      in_progress     daily_approved   бронь
-  #   approved   освобождается   + amount         снимается
-  #   rejected   освобождается   не трогаем       снимается
-  #   expired    держится        не трогаем       снимается (для повтора)
+  #   исход      in_progress     daily_approved   бронь State           доля (ShareLedger)
+  #   approved   освобождается   + amount         снимается             commit
+  #   rejected   освобождается   не трогаем       снимается             rollback
+  #   expired    держится        не трогаем       @held_reservations    hold
   #
   # Незакрытый резерв тихо ломает eligibility на седьмой заявке.
+  # expired-резерв закрывает Execution::PendingResolver через #resolve_hold.
   #
   # Domain::Provider иммутабельный (Data.define) — State держит параллельную
   # таблицу мутируемых полей по имени провайдера. Публичные читалки берут
   # значения только из этой таблицы, не из исходных объектов.
+  #
+  # Доли текущего прогона очереди инкапсулированы в @shares (Routing::ShareLedger).
+  # State делегирует ему ShareCounters-роль (count_units/volume_units/total_*/
+  # open_reservations) и первой строкой каждой мутации проксирует reserve/
+  # commit/rollback/hold в леджер. Стратегии видят State как ShareCounters.
+  # rubocop:disable Metrics/ClassLength -- один связный ответственник:
+  # in_progress + daily_approved + бронь + делегат к ShareLedger. Разрезание
+  # только увеличит связность через новый класс.
   class Providers
-    # Единственный fallback: подхватывает операцию, у которой ни один внешний
-    # провайдер не прошёл hard-constraints. Отсутствие в снапшоте — фатально.
     FALLBACK_NAME = 'spacepayments'
 
-    # Поля, которые State мутирует. Всё остальное живёт в исходном Provider
-    # и берётся оттуда через #fetch_provider(name).
     MUTABLE_FIELDS = %i[in_progress_count in_progress_amount
                         daily_approved_amount available_requisites].freeze
+
+    ALLOWED_RESOLUTIONS = %i[approved rejected].freeze
+
+    attr_reader :shares
 
     def initialize(providers)
       validate_no_duplicates!(providers)
@@ -33,40 +44,68 @@ module State
         [p.name, MUTABLE_FIELDS.to_h { |f| [f, p.public_send(f).to_i] }]
       end
       @reservations = {}
+      @held_reservations = {}
+      @shares = Routing::ShareLedger.new
     end
 
     def reserve(provider, operation)
-      name = provider.name
+      @shares.reserve(provider, operation)
+      name = provider_name(provider)
       key = [operation.operation_id, name]
-      if @reservations.key?(key)
-        raise ArgumentError,
-              "reserve already held for (#{key.first}, #{name})"
-      end
-
+      ensure_slot_free!(key, name)
       @state_by_name[name][:in_progress_count] += 1
       @state_by_name[name][:in_progress_amount] += operation.amount
       @reservations[key] = operation.amount
+      self
     end
 
     def commit(provider, operation)
-      name = provider.name
+      @shares.commit(provider, operation)
+      name = provider_name(provider)
       @state_by_name[name][:daily_approved_amount] += operation.amount
       release_capacity(name, operation)
       @reservations.delete([operation.operation_id, name])
+      self
     end
 
     def rollback(provider, operation)
-      name = provider.name
+      @shares.rollback(provider, operation)
+      name = provider_name(provider)
       release_capacity(name, operation)
       @reservations.delete([operation.operation_id, name])
+      self
     end
 
-    # expired: резерв держится (§4 ARCH), счётчики in_progress НЕ откатываются.
-    # Запись в @reservations снимаем — Ф2 PendingResolver может обработать ту
-    # же операцию повторно, и вторая reserve не должна упасть на идемпотентности.
     def hold(provider, operation)
-      @reservations.delete([operation.operation_id, provider.name])
+      @shares.hold(provider, operation)
+      name = provider_name(provider)
+      key = [operation.operation_id, name]
+      amount = @reservations.delete(key)
+      @held_reservations[key] = amount if amount
+      self
     end
+
+    # Закрывает expired-резерв, поставленный #hold. Actual — что на самом деле
+    # ответил провайдер по статус-чеку: :approved или :rejected. Прошлые
+    # решения не пересчитываются (§7 ARCH): only вносится delta по (op, provider).
+    def resolve_hold(provider, operation, actual)
+      validate_actual!(actual)
+      name = provider_name(provider)
+      key = [operation.operation_id, name]
+      amount = @held_reservations.delete(key) ||
+               (raise ArgumentError,
+                      "no held reservation for (#{operation.operation_id}, #{name})")
+
+      release_held(name, amount)
+      apply_resolution(provider, operation, name, actual)
+      self
+    end
+
+    def count_units(provider) = @shares.count_units(provider)
+    def volume_units(provider) = @shares.volume_units(provider)
+    def total_count_units = @shares.total_count_units
+    def total_volume_units = @shares.total_volume_units
+    def open_reservations = @shares.open_reservations
 
     def in_progress_count(name)
       fetch_state(name).fetch(:in_progress_count)
@@ -94,9 +133,41 @@ module State
 
     private
 
+    def provider_name(provider)
+      provider.is_a?(String) ? provider : provider.name
+    end
+
+    def ensure_slot_free!(key, name)
+      return unless @reservations.key?(key)
+
+      raise ArgumentError, "reserve already held for (#{key.first}, #{name})"
+    end
+
     def release_capacity(name, operation)
       @state_by_name[name][:in_progress_count] -= 1
       @state_by_name[name][:in_progress_amount] -= operation.amount
+    end
+
+    def release_held(name, amount)
+      @state_by_name[name][:in_progress_count] -= 1
+      @state_by_name[name][:in_progress_amount] -= amount
+    end
+
+    def apply_resolution(provider, operation, name, actual)
+      case actual
+      when :approved
+        @state_by_name[name][:daily_approved_amount] += operation.amount
+        @shares.commit(provider, operation)
+      when :rejected
+        @shares.rollback(provider, operation)
+      end
+    end
+
+    def validate_actual!(actual)
+      return if ALLOWED_RESOLUTIONS.include?(actual)
+
+      raise ArgumentError,
+            "actual must be :approved or :rejected, got #{actual.inspect}"
     end
 
     def fetch_state(name)
@@ -116,4 +187,5 @@ module State
       raise ArgumentError, "fallback provider #{FALLBACK_NAME} missing from snapshot"
     end
   end
+  # rubocop:enable Metrics/ClassLength
 end
