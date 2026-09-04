@@ -1,0 +1,31 @@
+# BALANCE (AdWords) demonstration: keep budget_headroom ahead of the base strategy.
+# The production configuration deliberately keeps layers empty.
+strategy: count_share
+layers: [budget_headroom]
+
+goals:
+  budget_headroom: { psi_threshold_micro: 100000 }
+  share_ceiling: { tolerance_bp: 0 }
+
+allocator:
+  tie_break: [weight_desc, name_asc]
+
+outcomes:
+  source: deterministic
+  seed: 42
+  calibrate_from_history: true
+
+amount_ranges:
+  - { from: 500, to: 50000, prefer: payflow }
+  - { from: 50001, to: 100000, prefer: vipay }
+  - { from: 100001, to: null, prefer: quickpay }
+
+obligations:
+  payflow: { daily_turnover_min: 2000000 }
+  vipay: { daily_turnover_max: 5000000 }
+
+rate_limits:
+  vipay: 7
+  quickpay: 15
+
+fallback_provider: spacepayments

@@ -16,6 +16,8 @@ require_relative '../support/provider_factory'
 RSpec.describe Routing::Assembly do
   include ProviderFactory
 
+  before { Routing::Layers.load_all! }
+
   def cfg(strategy: 'count_share', layers: [], amount_ranges: [])
     Config::RoutingConfig.new(
       strategy: strategy, layers: layers, goals: {}, strategy_selection: {},
@@ -91,13 +93,13 @@ RSpec.describe Routing::Assembly do
 
     it 'непустой список роняет сборку, а не игнорируется молча' do
       expect { described_class.layers(config: cfg(layers: ['conversion'])) }
-        .to raise_error(KeyError, /conversion.*Ф4/m)
+        .to raise_error(KeyError, /conversion.*budget_headroom/m)
     end
   end
 
   describe Routing::Layers do
-    it 'реестр слоёв пуст' do
-      expect(described_class.known).to eq([])
+    it 'реестр содержит первый слой Ф4' do
+      expect(described_class.known).to eq(['budget_headroom'])
     end
 
     it 'не подхватывает одноимённую стратегию: реестры раздельные' do
