@@ -74,6 +74,24 @@ RSpec.describe 'bin/route' do
     end
   end
 
+  # spec/contracts/fixtures_spec.rb проверяет форму "recommendations — массив
+  # строк" только на статической фикстуре (spec/fixtures/contracts/report.json),
+  # не на реальном выводе bin/route -- эту дыру A-7/X-6 впервые делают
+  # значимой (deviation_causes и retarget получают вычисляемое содержимое, а
+  # не пустышку/константу), и здесь она закрывается на живом прогоне.
+  it 'deviation_causes и recommendations — массивы строк с числом на реальном прогоне' do
+    Dir.mktmpdir do |tmp|
+      run_route(queue_path, '--out-dir', tmp)
+
+      report = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
+
+      expect(report['deviation_causes']).to all(be_a(String).and(match(/\d/)))
+      expect(report['recommendations']).to all(be_a(String).and(match(/\d/)))
+      expect(report['deviation_causes']).not_to be_empty
+      expect(report['recommendations']).to include(a_string_starting_with('retarget:'))
+    end
+  end
+
   it 'даёт побайтово одинаковый результат на двух прогонах' do
     Dir.mktmpdir do |tmp_a|
       Dir.mktmpdir do |tmp_b|

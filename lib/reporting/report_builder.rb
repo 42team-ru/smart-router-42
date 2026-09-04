@@ -4,12 +4,15 @@ require 'json'
 require_relative '../routing/reasons'
 require_relative '../routing/achievable'
 require_relative '../routing/constraints'
+require_relative '../offline/objective'
+require_relative 'deviation_causes'
 require_relative 'distributions'
 require_relative 'recommendations'
+require_relative 'retarget'
 require_relative 'utilization'
 
 module Reporting
-  # A-3..A-6: сборка routing_report.json из уже готовых решений.
+  # A-3..A-8: сборка routing_report.json из уже готовых решений.
   #
   # Вход — те же пары (Domain::Operation, Execution::Outcome), что и у
   # DecisionsWriter, плюс снимок провайдеров (цели, лимиты, паспортные
@@ -17,10 +20,13 @@ module Reporting
   #
   # achievable_pct считается по-настоящему: Routing::Achievable.for_queue (R-12)
   # на множестве допустимых по ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт
-  # только в отчёт и никогда в принятие решений.
+  # только в отчёт и никогда в принятие решений. Тот же achievable/eligibility
+  # переиспользуют A-7 (DeviationCauses) и X-6 (Retarget) -- считается один раз
+  # в #sections, а не заново в каждой секции.
   #
-  # benchmark/deviation_causes остаются заглушками: это X-5 и A-7 из Ф5. Поля
-  # заведены в структуре заранее -- формат отчёта после гейта Ф2 не меняется.
+  # benchmark остаётся заглушкой только как дефолт на случай отсутствия
+  # kwarg-а (см. #benchmark ниже) -- в реальном прогоне bin/route всегда
+  # передаёт настоящий эталон (X-5, lib/offline/*).
   # rubocop:disable-next Metrics/ModuleLength -- отчёт собран в одном публичном фасаде.
   module ReportBuilder
     FALLBACK_PROVIDER = 'spacepayments'
@@ -49,14 +55,19 @@ module Reporting
     private_class_method :header
 
     def self.sections(pairs, outcomes, providers, history, benchmark)
-      distributions(pairs, outcomes, providers)
-        .merge(analytics(pairs, outcomes, providers, history, benchmark))
+      operations = pairs.map(&:first)
+      eligibility = eligibility_for(operations, providers)
+      achievable = Routing::Achievable.for_queue(operations: operations, providers: providers,
+                                                 eligibility: eligibility)
+      metrics = Offline::Objective.from_pairs(pairs, providers: providers)
+
+      distributions(pairs, outcomes, providers, achievable)
+        .merge(analytics(pairs, outcomes, providers, history, benchmark, achievable, eligibility,
+                         metrics))
     end
     private_class_method :sections
 
-    def self.distributions(pairs, outcomes, providers)
-      achievable = achievable_shares(pairs.map(&:first), providers)
-
+    def self.distributions(pairs, outcomes, providers, achievable)
       {
         'distribution' => Distributions.by_final(pairs, providers, :count, achievable),
         'volume_distribution' => Distributions.by_final(pairs, providers, :amount, achievable),
@@ -70,29 +81,36 @@ module Reporting
     # spacepayments в множество не входит: он fallback по допуску, и включение
     # его в eligibility сломало бы нижние границы Achievable (операция с
     # единственным внешним провайдером перестала бы такой считаться).
-    def self.achievable_shares(operations, providers)
+    def self.eligibility_for(operations, providers)
       external = providers.reject { |provider| provider.name == FALLBACK_PROVIDER }
-      eligibility = operations.to_h do |operation|
+      operations.to_h do |operation|
         names = external.select { |provider| Routing::Constraints.eligible?(provider, operation) }
         [operation.operation_id, names.map(&:name)]
       end
-
-      Routing::Achievable.for_queue(operations: operations, providers: providers,
-                                    eligibility: eligibility)
     end
-    private_class_method :achievable_shares
+    private_class_method :eligibility_for
 
-    def self.analytics(pairs, outcomes, providers, history, benchmark)
+    # rubocop:disable-next Metrics/ParameterLists -- параметры отражают уже посчитанные секции отчёта.
+    def self.analytics(pairs, outcomes, providers, history, benchmark, achievable, eligibility,
+                       metrics)
       {
         'skip_reasons' => Distributions.skip_reasons(outcomes),
         'projected_daily_utilization' => Utilization.projected_daily(pairs, providers),
         'fallback' => fallback(outcomes),
         'benchmark' => benchmark || self.benchmark,
-        'deviation_causes' => [],
-        'recommendations' => Recommendations.build(pairs, providers, history)
+        'deviation_causes' => DeviationCauses.build(pairs, providers, achievable, eligibility),
+        'recommendations' => build_recommendations(pairs, providers, history, achievable, metrics)
       }
     end
     private_class_method :analytics
+
+    def self.build_recommendations(pairs, providers, history, achievable, metrics)
+      recommendations = Recommendations.build(pairs, providers, history)
+      retarget = Retarget.build(providers, achievable, metrics)
+
+      retarget ? recommendations + [retarget] : recommendations
+    end
+    private_class_method :build_recommendations
 
     def self.period(operations)
       return nil if operations.empty?

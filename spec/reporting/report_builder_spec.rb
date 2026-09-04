@@ -168,7 +168,6 @@ RSpec.describe Reporting::ReportBuilder do
         'offline_bound' => nil, 'our_online_result' => nil,
         'competitive_ratio' => nil, 'note' => 'эталон не считался'
       )
-      expect(report['deviation_causes']).to eq([])
     end
 
     it 'передаёт benchmark без изменений' do
@@ -176,6 +175,31 @@ RSpec.describe Reporting::ReportBuilder do
 
       expect(described_class.build(pairs, providers: providers, benchmark: benchmark)['benchmark'])
         .to equal(benchmark)
+    end
+
+    # Синтетический снапшот фикстуры не допускает НИКОГО ни до одной из трёх
+    # операций (см. комментарий у теста distribution выше) -- Achievable не
+    # может приписать отклонение ни допуску (:only_option), ни дневному
+    # лимиту (:money), bound уходит в :none. A-7 в этом случае не молчит и не
+    # гадает, а помечает причину как неопределённую -- реальные структурные
+    # случаи (:only_option/:money) проверяет spec/reporting/deviation_causes_spec.rb
+    # на настоящих данных публичной очереди.
+    it 'помечает отклонение без структурной причины как требующее ручного разбора' do
+      expect(report['deviation_causes']).to contain_exactly(
+        a_string_matching(/\Avipay -6\.7 п\.п\. к цели: структурная причина не определена/),
+        a_string_matching(/\Apayflow -35 п\.п\. к цели: структурная причина не определена/),
+        a_string_matching(/\Aquickpay \+8\.3 п\.п\. к цели: структурная причина не определена/)
+      )
+    end
+
+    # Тот же вырожденный снапшот делает achievable_bp равным нулю (округлённо)
+    # у всех провайдеров -- Retarget сознательно НЕ предлагает "снизить цели до
+    # 0%" без структурной причины (reason_for пуст, все bound == :none), иначе
+    # рекомендация звучала бы как пустое "недостижимы () -- снизьте всё до
+    # нуля". Реальный retarget с непустой причиной проверяет тест ниже и
+    # spec/reporting/retarget_spec.rb.
+    it 'не предлагает retarget, когда недостижимость не объяснена структурно' do
+      expect(report['recommendations']).not_to include(a_string_starting_with('retarget:'))
     end
 
     it 'формирует параметрические recommendations по конверсии и дневному лимиту' do
