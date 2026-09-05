@@ -24,9 +24,10 @@ module Synthetic
   # стратегия даёт один и тот же ответ.
   module Profiles
     Profile = Data.define(:name, :exclusive_pct, :poisoned_pct, :orphan_noise_pct,
-                          :distribution_band_pp, :amount_span_divisor)
+                          :distribution_band_pp, :amount_span_divisor, :normalize_traffic)
 
     DEFAULT_AMOUNT_SPAN_DIVISOR = 2
+    DEFAULT_NORMALIZE_TRAFFIC = false
 
     TABLE = {
       'healthy' => { exclusive_pct: 30, poisoned_pct: 0, orphan_noise_pct: 0,
@@ -51,8 +52,15 @@ module Synthetic
       # отдаёт почти всё лучшему провайдеру, count_share ведёт к целевым долям,
       # round_robin делит поровну. Корректность по-прежнему стерегут
       # конструктивные якоря и проверка hard-constraints.
+      # normalize_traffic: целевые доли приводятся к сумме 100%. Без этого они
+      # у каждого провайдера независимы (5..64) и в сумме дают под 300% — цель
+      # недостижима для любой стратегии, отклонение у всех одинаково велико, и
+      # сравнение вырождается. Остальные профили нормировку не включают: там
+      # проверяется корректность, а не качество распределения, и менять их
+      # генерацию задним числом нельзя.
       'competitive' => { exclusive_pct: 10, poisoned_pct: 0, orphan_noise_pct: 0,
-                         distribution_band_pp: 100, amount_span_divisor: 1 }
+                         distribution_band_pp: 100, amount_span_divisor: 1,
+                         normalize_traffic: true }
     }.freeze
 
     # Ротация видов «отравления» для poisoned-провайдеров — по одному
@@ -67,7 +75,8 @@ module Synthetic
     def fetch(name)
       raw = TABLE.fetch(name.to_s) { raise unknown_profile(name) }
       Profile.new(name: name.to_s,
-                  amount_span_divisor: DEFAULT_AMOUNT_SPAN_DIVISOR, **raw)
+                  amount_span_divisor: DEFAULT_AMOUNT_SPAN_DIVISOR,
+                  normalize_traffic: DEFAULT_NORMALIZE_TRAFFIC, **raw)
     end
 
     def known = TABLE.keys

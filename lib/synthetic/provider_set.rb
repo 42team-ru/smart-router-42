@@ -41,18 +41,57 @@ module Synthetic
 
     module_function
 
-    # rubocop:disable-next Metrics/AbcSize -- сборка результата из уже готовых групп, дальше дробить некуда.
     def build(level:, profile:, seed:)
       roles = assign_roles(level.providers, profile, seed)
       anchor_count = anchors_per_exclusive(level.operations, roles[:exclusive].size)
       groups = build_groups(roles, level, profile, anchor_count)
 
       Result.new(
-        raw_providers: groups.values.flatten.map { |d| raw_provider(d, seed) } + [fallback_raw],
+        raw_providers: build_raw_providers(groups, profile, seed),
         exclusive: groups[:exclusive], wide: groups[:wide], poisoned: groups[:poisoned],
         fallback_name: FALLBACK_NAME, anchors_per_exclusive: anchor_count,
         fallback_anchor_count: fallback_anchor_count(level.operations)
       )
+    end
+
+    def build_raw_providers(groups, profile, seed)
+      raws = groups.values.flatten.map { |descriptor| raw_provider(descriptor, seed) }
+      normalize_traffic(raws, profile) + [fallback_raw]
+    end
+
+    # Приводит целевые доли к сумме 100% методом наибольших остатков: доли
+    # целые, поэтому пропорция даёт дробь, и остаток раздаётся по убыванию
+    # дробной части. Провайдеры с нулевым трафиком (отравленные zero_traffic)
+    # остаются нулевыми — их доля не цель, а способ отсева.
+    def normalize_traffic(raws, profile)
+      return raws unless profile.normalize_traffic
+
+      targets = raws.select { |raw| raw['traffic_percentage'].positive? }
+      total = targets.sum { |raw| raw['traffic_percentage'] }
+      return raws if total.zero?
+
+      apply_shares(targets, shares_for(targets, total))
+      raws
+    end
+
+    def shares_for(targets, total)
+      exact = targets.map { |raw| raw['traffic_percentage'] * 100.0 / total }
+      floors = exact.map(&:floor)
+      distribute_remainder(exact, floors)
+    end
+
+    # Остаток от округления вниз раздаётся по убыванию дробной части; при равных
+    # дробных частях выигрывает меньший индекс — иначе порядок зависел бы от
+    # реализации сортировки, а генератор обязан быть воспроизводимым.
+    def distribute_remainder(exact, floors)
+      remainder = 100 - floors.sum
+      ranked = exact.each_with_index.sort_by { |value, index| [value.floor - value, index] }
+      ranked.first(remainder).each { |pair| floors[pair.last] += 1 }
+      floors
+    end
+
+    def apply_shares(targets, shares)
+      targets.each_with_index { |raw, index| raw['traffic_percentage'] = shares[index] }
     end
 
     def build_groups(roles, level, profile, anchor_count)

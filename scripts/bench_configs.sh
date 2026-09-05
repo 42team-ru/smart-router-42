@@ -35,7 +35,10 @@ if [ ${#configs[@]} -eq 0 ]; then
   done < <(bundle exec ruby -e '$LOAD_PATH.unshift("lib"); require "routing/strategies"; puts Routing::Strategies.load_all!')
 fi
 
-printf '%-22s %10s %9s %9s %8s\n' конфиг доставлено spacepay откл_пп ratio
+# max_share — доля крупнейшего провайдера. Она и различает стратегии нагляднее
+# всего: conversion сваливает почти всё лучшему, round_robin делит поровну,
+# count_share ведёт к целевым долям. Отклонение и ratio берём из эталона.
+printf '%-22s %10s %9s %10s %9s %8s\n' конфиг доставлено spacepay макс_доля откл_пп ratio
 for cfg in "${configs[@]}"; do
   # Ненулевой код выхода означает вердикт ПРОВАЛ, а не сбой запуска: строку
   # всё равно печатаем, иначе конфиг с необычным распределением просто исчезал
@@ -49,5 +52,7 @@ for cfg in "${configs[@]}"; do
   space=$(grep -oP '\K[0-9]+(?= в spacepayments)' <<<"$out")
   dev=$(grep -oP 'наш прогон: доставлено [0-9]+, отклонение \K[0-9.]+' <<<"$out")
   ratio=$(grep -oP 'competitive_ratio: \K.+' <<<"$out")
-  printf '%-22s %10s %9s %9s %8s\n' "$(basename "$cfg" .yml)" "$delivered" "$space" "${dev:-—}" "${ratio:-—}"
+  max_share=$(ruby -rjson -e 'puts JSON.parse(File.read(ARGV[0]))["distribution"].values.map { |v| v["share_pct"] }.max' "$DIR/analytics.json")
+  printf '%-22s %10s %9s %9s%% %9s %8s\n' "$(basename "$cfg" .yml)" "$delivered" "$space" \
+    "$max_share" "${dev:-—}" "${ratio:-—}"
 done
