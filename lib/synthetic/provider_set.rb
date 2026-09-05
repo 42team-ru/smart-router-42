@@ -56,7 +56,37 @@ module Synthetic
 
     def build_raw_providers(groups, profile, seed)
       raws = groups.values.flatten.map { |descriptor| raw_provider(descriptor, seed) }
-      normalize_traffic(raws, profile) + [fallback_raw]
+      normalize_traffic(raws, profile)
+      enrich_fields(raws, profile, seed)
+      raws + [fallback_raw]
+    end
+
+    # Поля, которых нет в снапшоте организаторов и которые ТЗ предлагает завести
+    # самим. Без них стратегии load, obligations и volume_share вырождаются в
+    # сортировку по имени, и сравнение конфигураций теряет смысл. Значения
+    # детерминированы хешем от seed и имени, как и остальной генератор.
+    def enrich_fields(raws, profile, seed)
+      return raws unless profile.full_provider_fields
+
+      raws.each { |raw| enrich_provider(raw, seed) }
+    end
+
+    def enrich_provider(raw, seed)
+      name = raw['payment_system']
+      capacity = 5 + (hash_int(seed, 'capacity', name) % 20)
+      raw['volume_share_pct'] = raw['traffic_percentage']
+      raw['in_progress_count_limit'] = capacity
+      raw['in_progress_count'] = hash_int(seed, 'inflight', name) % capacity
+      raw.merge!(turnover_fields(name, seed))
+    end
+
+    # Минимум 100..500 тыс, максимум 600..1000 тыс — так обязательства заведомо
+    # различимы между провайдерами и не вырождаются в один порог на всех.
+    def turnover_fields(name, seed)
+      {
+        'daily_turnover_min' => ((hash_int(seed, 'turnover_min', name) % 5) + 1) * 100_000,
+        'daily_turnover_max' => ((hash_int(seed, 'turnover_max', name) % 5) + 6) * 100_000
+      }
     end
 
     # Приводит целевые доли к сумме 100% методом наибольших остатков: доли

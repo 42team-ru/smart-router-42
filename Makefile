@@ -84,11 +84,12 @@ ORACLE_FLAG = $(if $(ORACLE),--oracle,)
 # есть реальный выбор почти на каждой заявке). Для каждого конфига из
 # config/examples печатает распределение и отклонение — так видно, какая
 # настройка ведёт к целевым долям, а какая нет.
-#   make bench-configs                      # все стратегии из реестра
-#   make bench-configs CONFIGS="a.yml b.yml"  # конкретные конфиги
+#   make bench-configs                        # все стратегии из реестра
+#   make bench-configs CONFIGS=config          # все *.yml каталога, рекурсивно
+#   make bench-configs CONFIGS="a.yml b.yml"   # конкретные файлы
 CONFIGS ?=
 bench-configs:
-	@bash scripts/bench_configs.sh $(CONFIGS)
+	@bundle exec ruby scripts/bench_configs.rb $(CONFIGS)
 
 bench-all:
 	@for lvl in smoke s m; do \

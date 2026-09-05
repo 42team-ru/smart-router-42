@@ -24,10 +24,12 @@ module Synthetic
   # стратегия даёт один и тот же ответ.
   module Profiles
     Profile = Data.define(:name, :exclusive_pct, :poisoned_pct, :orphan_noise_pct,
-                          :distribution_band_pp, :amount_span_divisor, :normalize_traffic)
+                          :distribution_band_pp, :amount_span_divisor, :normalize_traffic,
+                          :full_provider_fields)
 
     DEFAULT_AMOUNT_SPAN_DIVISOR = 2
     DEFAULT_NORMALIZE_TRAFFIC = false
+    DEFAULT_FULL_PROVIDER_FIELDS = false
 
     TABLE = {
       'healthy' => { exclusive_pct: 30, poisoned_pct: 0, orphan_noise_pct: 0,
@@ -58,9 +60,15 @@ module Synthetic
       # сравнение вырождается. Остальные профили нормировку не включают: там
       # проверяется корректность, а не качество распределения, и менять их
       # генерацию задним числом нельзя.
+      # full_provider_fields: заполняются поля, без которых половина стратегий
+      # работает вхолостую — volume_share_pct, лимиты in_progress, обязательства
+      # по обороту. Без них load считает всех одинаково свободными, obligations
+      # держит всех в средней группе, volume_share падает обратно на
+      # traffic_percentage, и сравнение получается между тремя работающими
+      # стратегиями и четырьмя выключенными.
       'competitive' => { exclusive_pct: 10, poisoned_pct: 0, orphan_noise_pct: 0,
                          distribution_band_pp: 100, amount_span_divisor: 1,
-                         normalize_traffic: true }
+                         normalize_traffic: true, full_provider_fields: true }
     }.freeze
 
     # Ротация видов «отравления» для poisoned-провайдеров — по одному
@@ -76,7 +84,8 @@ module Synthetic
       raw = TABLE.fetch(name.to_s) { raise unknown_profile(name) }
       Profile.new(name: name.to_s,
                   amount_span_divisor: DEFAULT_AMOUNT_SPAN_DIVISOR,
-                  normalize_traffic: DEFAULT_NORMALIZE_TRAFFIC, **raw)
+                  normalize_traffic: DEFAULT_NORMALIZE_TRAFFIC,
+                  full_provider_fields: DEFAULT_FULL_PROVIDER_FIELDS, **raw)
     end
 
     def known = TABLE.keys
