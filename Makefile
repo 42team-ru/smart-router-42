@@ -12,7 +12,14 @@
 QUEUE ?= reference/data/operations_queue_10.json
 OUT   ?= out/routing_decisions_test.json
 
-.PHONY: gate test lint fmt validate route determinism no-random install deliver help install-swagger-ui openapi-check openapi-embed serve
+# Уровни синтетического генератора/бенчмарка (lib/synthetic, lib/bench):
+# smoke/s/m/l/xl/insane — см. Synthetic::Levels. gen/bench НЕ входят в gate:
+# гейт обязан оставаться быстрым, l/xl/insane — минуты и десятки минут.
+LEVEL   ?= smoke
+SEED    ?= 42
+GEN_DIR ?= tmp/bench/$(LEVEL)
+
+.PHONY: gate test lint fmt validate route determinism no-random install deliver gen bench bench-all help install-swagger-ui openapi-check openapi-embed serve
 
 gate: test lint no-random
 
@@ -53,8 +60,28 @@ no-random:
 install:
 	bundle install
 
+# Генератор входа с конструктивным оракулом (Synthetic::Writer): providers/
+# queue/expectation в GEN_DIR. Только пишет файлы, ничего не роутит.
+gen:
+	bundle exec ruby bin/gen --level $(LEVEL) --seed $(SEED) --out-dir $(GEN_DIR)
+
+# Стресс-бенчмарк: ядро (Routing::Planner + Execution::Executor) в потоковом
+# режиме, без записи decisions.json ни на одном уровне; полный CLI с записью
+# файлов — bundle exec bin/route на выходе `make gen` (см. bin/bench --help).
+# Сам генерит вход при первом запуске, если GEN_DIR ещё пуст.
+bench:
+	bundle exec ruby bin/bench --level $(LEVEL) --seed $(SEED) --dir $(GEN_DIR)
+
+# Быстрый прогон малых уровней подряд — для ручной проверки после правок
+# в lib/synthetic или lib/bench, не входит в gate.
+bench-all:
+	@for lvl in smoke s m; do \
+		bundle exec ruby bin/bench --level $$lvl --seed $(SEED) || exit 1; \
+	done
+
 help:
 	@echo "gate test lint fmt validate route determinism no-random install deliver"
+	@echo "gen bench bench-all (LEVEL=smoke|s|m|l|xl|insane, SEED=42)"
 	@echo "openapi-check openapi-embed install-swagger-ui serve"
 
 # HTTP-сервис. Puma workers=1 threads=1 — детерминизм гарантирован конструкцией.

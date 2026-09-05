@@ -1,0 +1,127 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Стресс-бенчмарк с выбираемыми уровнями (Synthetic::Levels).
+#
+# Использование:
+#   bin/bench --level LEVEL [--seed SEED] [--dir DIR] [--config PATH]
+#
+# Если providers/queue/expectation в DIR ещё нет — генерирует их сам (тот же
+# путь, что и bin/gen), чтобы `make bench LEVEL=xl` работал одной командой.
+# Гоняет только ядро (Routing::Planner + Execution::Executor) в потоковом
+# режиме — decisions.json не пишется ни на одном уровне; полный CLI с записью
+# файлов — bundle exec bin/route на выходе bin/gen, отдельно.
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+
+require 'optparse'
+require 'json'
+require_relative '../lib/synthetic/levels'
+require_relative '../lib/synthetic/writer'
+require_relative '../lib/bench/runner'
+require_relative '../lib/bench/measurement'
+
+DEFAULT_CONFIG = File.expand_path('../config/bench.yml', __dir__)
+
+def usage
+  "Использование: bin/bench --level LEVEL [--seed SEED] [--dir DIR] [--config PATH]\n" \
+    "Уровни: #{Synthetic::Levels.known.join(', ')}"
+end
+
+def fail_with(message)
+  warn message
+  exit 1
+end
+
+def add_options(opts, options)
+  opts.on('--level LEVEL', 'Имя уровня нагрузки') { |v| options[:level] = v }
+  opts.on('--seed SEED', 'Seed (по умолчанию 42)') { |v| options[:seed] = v }
+  opts.on('--dir DIR', 'Каталог со входом (по умолчанию tmp/bench/<level>)') do |v|
+    options[:dir] = v
+  end
+  opts.on('--config PATH', 'Конфиг роутинга (по умолчанию config/bench.yml)') do |v|
+    options[:config] = v
+  end
+end
+
+def build_option_parser(options)
+  OptionParser.new do |opts|
+    opts.banner = usage
+    add_options(opts, options)
+  end
+end
+
+def validate_level!(name)
+  return if Synthetic::Levels.known.include?(name)
+
+  fail_with("Неизвестный уровень #{name.inspect}; допустимы: #{Synthetic::Levels.known.join(', ')}")
+end
+
+def parse_args(argv)
+  options = { seed: '42', dir: nil, config: DEFAULT_CONFIG }
+  build_option_parser(options).parse!(argv)
+  fail_with("Не указан --level.\n#{usage}") unless options[:level]
+  validate_level!(options[:level])
+
+  options
+rescue OptionParser::ParseError => e
+  fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
+end
+
+def ensure_input(level, dir, seed)
+  queue_path = File.join(dir, Synthetic::Writer.queue_filename(level))
+  providers_path = File.join(dir, Synthetic::Writer::PROVIDERS_FILENAME)
+  expectation_path = File.join(dir, Synthetic::Writer::EXPECTATION_FILENAME)
+  return [providers_path, queue_path, expectation_path] if File.exist?(queue_path)
+
+  puts "Вход не найден в #{dir}, генерирую (level=#{level.name}, seed=#{seed})..."
+  result = Synthetic::Writer.write(level_name: level.name, seed: seed, out_dir: dir)
+  [result[:providers_path], result[:queue_path], result[:expectation_path]]
+end
+
+def print_report(result, level)
+  puts "\n=== #{level.name} (#{level.operations} операций, #{level.providers} провайдеров, " \
+       "профиль #{level.profile}) ==="
+  puts "обработано: #{result.operations_seen}"
+  Bench::Measurement.format_snapshot(result.measurement, result.operations_seen).each do |line|
+    puts line
+  end
+  print_oracle_note(level)
+  print_verdict(result.report)
+end
+
+def print_oracle_note(level)
+  return if level.run_oracle
+
+  puts 'оракул (Offline::Oracle) и достижимость (Routing::Achievable) отключены на этом ' \
+       'уровне — O(operations·providers) не масштабируется до этого N (см. план бенчмарка)'
+end
+
+def print_verdict(report)
+  puts "точных якорей проверено: #{report.exact_checked}, расхождений: #{report.exact_failed}"
+  puts "нарушений hard-constraints: #{report.hard_violations}"
+  report.failures.each { |line| puts "  ✗ #{line}" }
+  report.aggregate_failures.each { |line| puts "  ✗ агрегат: #{line}" }
+  puts(report.ok ? 'ВЕРДИКТ: OK' : 'ВЕРДИКТ: ПРОВАЛ')
+end
+
+def build_runner(options, level)
+  providers_path, queue_path, expectation_path = ensure_input(level, options[:dir_resolved],
+                                                              options[:seed])
+  expectation = JSON.parse(File.read(expectation_path))
+  Bench::Runner.new(providers_path: providers_path, queue_path: queue_path,
+                    config_path: options[:config], expectation: expectation,
+                    mode: level.mode, seed: options[:seed])
+end
+
+def main(argv)
+  options = parse_args(argv)
+  level = Synthetic::Levels.fetch(options[:level])
+  options[:dir_resolved] = options[:dir] || File.join('tmp', 'bench', level.name)
+
+  result = build_runner(options, level).run
+  print_report(result, level)
+  exit(result.report.ok ? 0 : 1)
+end
+
+main(ARGV) if $PROGRAM_NAME == __FILE__
