@@ -63,6 +63,7 @@ module Config
       validate_hash!(raw['goals'], 'goals')
       validate_hash!(raw['strategy_selection'], 'strategy_selection')
       validate_hash!(raw['outcomes'], 'outcomes')
+      SchemaRules.validate_outcomes!(raw['outcomes'])
     end
 
     def self.validate_hash!(value, key)

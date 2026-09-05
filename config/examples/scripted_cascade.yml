@@ -1,0 +1,75 @@
+# Демо каскада: исходы заданы сценарием, а не хешем от seed.
+#
+#   bundle exec bin/route reference/data/operations_queue_10.json \
+#     --config config/examples/scripted_cascade.yml
+#
+# Зачем. На боевом источнике исход считается как SHA256(seed:операция:провайдер:
+# попытка), и чтобы показать отказ с переходом к следующему провайдеру, seed
+# приходится подбирать. Здесь исход каждой пары написан явно, поэтому демо не
+# зависит от удачного числа и читается как сценарий, а не как фокус.
+#
+# Сюжет: op_101 (15 000 ₽, sberbank) допускает vipay, payflow и quickpay.
+# vipay отказывает — заявку подхватывает payflow, и в attempts видно две
+# реальные попытки с причиной next_in_cascade. Остальные операции одобряются
+# первой попыткой, чтобы не отвлекать от разбираемого случая.
+#
+# Промах ключа — ошибка с именем пары, а не тихий дефолт: сценарий, забывший
+# провайдера, обязан падать громко.
+
+strategy: count_share
+layers: []
+fallback_provider: spacepayments
+
+outcomes:
+  source: scripted
+  script:
+    op_101:
+      vipay: rejected      # ← отказ, из-за которого включается каскад
+      payflow: approved    # ← подхватывает следующим
+      quickpay: approved
+      spacepayments: approved
+    op_102:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_103:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_104:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_105:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_106:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_107:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_108:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_109:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved
+    op_110:
+      vipay: approved
+      payflow: approved
+      quickpay: approved
+      spacepayments: approved

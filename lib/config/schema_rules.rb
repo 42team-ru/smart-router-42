@@ -24,6 +24,17 @@ module Config
       'on_timeout' => %w[stop continue].freeze
     }.freeze
 
+    # Источники исходов, которые умеет собрать bin/route. Держим список здесь,
+    # а не только в bin/route: опечатка в имени источника должна падать на
+    # загрузке конфига внятным сообщением, а не «неизвестный источник» позже.
+    # scripted требует ещё и outcomes.script -- путь к сценарию.
+    OUTCOME_SOURCES = %w[deterministic always_ok always_fail scripted].freeze
+
+    # Допустимые исходы во встроенном сценарии. Совпадают с
+    # Execution::OutcomeSource::Scripted::ALLOWED, но записаны строками: конфиг
+    # грузится без permitted_classes: [Symbol], в нём это обычный текст.
+    SCRIPT_OUTCOMES = %w[approved rejected expired].freeze
+
     def self.validate_layers!(layers)
       return if layers.nil?
       return if layers.is_a?(Array) && layers.all?(String)
@@ -129,6 +140,73 @@ module Config
 
       raise SchemaError, "cascade.#{key} должен быть одним из: #{allowed.join(', ')}; " \
                          "получено #{value.inspect}"
+    end
+
+    # Значение outcomes.source и парный ему outcomes.script. Сам ключ
+    # `outcomes` уже проверен на «это отображение» в SchemaValidator; здесь --
+    # только имя источника и обязательность пути для scripted.
+    def self.validate_outcomes!(outcomes)
+      return if outcomes.nil? || !outcomes.is_a?(Hash)
+
+      validate_outcome_source!(outcomes)
+      validate_outcome_script!(outcomes)
+    end
+
+    def self.validate_outcome_source!(outcomes)
+      return unless outcomes.key?('source')
+
+      source = outcomes['source']
+      return if OUTCOME_SOURCES.include?(source)
+
+      raise SchemaError, "outcomes.source должен быть одним из: #{OUTCOME_SOURCES.join(', ')}; " \
+                         "получено #{source.inspect}"
+    end
+
+    # outcomes.script принимает две формы: сам сценарий отображением
+    # (операция -> провайдер -> исход) прямо в конфиге, либо строку — путь к
+    # отдельному YAML. Первая форма основная: сценарий — такая же настройка
+    # поведения, как стратегия или слои, и живёт там же, где остальная
+    # конфигурация.
+    #
+    # scripted без сценария — не «источник по умолчанию», а ошибка конфига:
+    # тихий дефолт скрыл бы опечатку и подсунул детерминированные исходы там,
+    # где автор сценария ждёт своих.
+    def self.validate_outcome_script!(outcomes)
+      script = outcomes['script']
+
+      if outcomes['source'] == 'scripted' && !(script.is_a?(String) || script.is_a?(Hash))
+        raise SchemaError, 'outcomes.source: scripted требует outcomes.script — сценарий ' \
+                           'исходов отображением или путь к YAML со сценарием'
+      end
+
+      return if script.nil? || script.is_a?(String)
+      return validate_inline_script!(script) if script.is_a?(Hash)
+
+      raise SchemaError, 'outcomes.script должен быть отображением или строкой, ' \
+                         "получено: #{script.class}"
+    end
+
+    # Форма встроенного сценария проверяется на загрузке, а не в момент первого
+    # промаха по ключу: конфиг с опечаткой в имени исхода обязан падать сразу и
+    # с указанием пары, а не на середине прогона очереди.
+    def self.validate_inline_script!(script)
+      script.each do |operation_id, by_provider|
+        unless by_provider.is_a?(Hash)
+          raise SchemaError, "outcomes.script.#{operation_id} должен быть отображением " \
+                             'провайдер -> исход'
+        end
+
+        by_provider.each do |provider, outcome|
+          validate_script_outcome!(operation_id, provider, outcome)
+        end
+      end
+    end
+
+    def self.validate_script_outcome!(operation_id, provider, outcome)
+      return if SCRIPT_OUTCOMES.include?(outcome.to_s)
+
+      raise SchemaError, "outcomes.script.#{operation_id}.#{provider}: недопустимый исход " \
+                         "#{outcome.inspect}; допустимы #{SCRIPT_OUTCOMES.join(', ')}"
     end
 
     # П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение конфигураций.

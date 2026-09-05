@@ -16,6 +16,8 @@ module Execution
     #   op_102:
     #     vipay: :expired
     class Scripted < Base
+      ALLOWED = %i[approved rejected expired].freeze
+
       def self.load(path)
         script = YAML.safe_load_file(path, permitted_classes: [Symbol])
         new(script: script)
@@ -30,9 +32,25 @@ module Execution
         by_provider = @script.fetch(operation.operation_id) do
           raise KeyError, "нет исхода для операции #{operation.operation_id}"
         end
-        by_provider.fetch(provider.name) do
+        outcome = by_provider.fetch(provider.name) do
           raise KeyError, "нет исхода для (#{operation.operation_id}, #{provider.name})"
         end
+        normalize(outcome)
+      end
+
+      private
+
+      # Сценарий приходит из двух мест с разной типизацией: отдельный YAML
+      # грузится с permitted_classes: [Symbol] и даёт :approved, а сценарий,
+      # вписанный в config/routing.yml, проходит через общий загрузчик конфига
+      # без Symbol и даёт "approved". Для вызывающей стороны это один и тот же
+      # исход, поэтому приводим здесь, а не заставляем автора сценария помнить,
+      # где двоеточие обязательно.
+      def normalize(outcome)
+        symbol = outcome.to_sym
+        return symbol if ALLOWED.include?(symbol)
+
+        raise KeyError, "недопустимый исход #{outcome.inspect}; допустимы #{ALLOWED.join(', ')}"
       end
     end
   end

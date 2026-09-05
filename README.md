@@ -114,6 +114,7 @@ comparison:
 | ` amount_ranges`                   | полосы суммы для стратегии `amount_range` | **да**, когда `strategy: amount_range` |
 | `fallback_provider`                | провайдер последней надежды (fallback по допуску) | **да**: имя уходит в `Routing::Planner` |
 | `outcomes.source`, `outcomes.seed` | источник симулированных исходов и seed | **да**; CLI-флаги сильнее YAML |
+| `outcomes.script` | сценарий исходов для `source: scripted` — отображение операция → провайдер → исход прямо в конфиге либо путь к YAML | **да** |
 | `outcomes.calibrate_from_history`  | брать конверсии исходов из `operations_history.csv` | **да** |
 | `obligations`                      | целевые дневные обороты провайдеров | на public-снапшоте не применяются; CLI один раз печатает предупреждение о недостающих полях |
 | `rate_limits`                      | ограничение интенсивности (запросов в минуту) | на public-снапшоте не применяются; CLI один раз печатает предупреждение о недостающем поле |
@@ -227,6 +228,33 @@ bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/load
 | `obligations` | 3 | 7 | 0 |
 | `priority` | 3 | 3 | 4 |
 | `volume_share` | 3 | 3 | 4 |
+
+### Демо каскада: сценарий вместо подобранного seed
+
+Исход можно не выводить из хеша, а задать явно — `outcomes.source: scripted` и
+сценарий в том же конфиге:
+
+```yaml
+outcomes:
+  source: scripted
+  script:
+    op_101:
+      vipay: rejected      # отказ, из-за которого включается каскад
+      payflow: approved    # подхватывает следующим
+```
+
+```
+bundle exec bin/route reference/data/operations_queue_10.json \
+  --config config/examples/scripted_cascade.yml
+```
+
+`op_101` уходит в `payflow` после отказа `vipay`, в `attempts` видны две реальные
+попытки и причина `next_in_cascade`. Результат не зависит от `--seed`: сценарий
+сильнее хеша, на это есть спек. Промах ключа — ошибка с именем пары, а не тихий
+дефолт; недопустимый исход ловится на загрузке конфига, а не в середине очереди.
+
+Тот же механизм закрывает вырожденные случаи: `--outcomes always_fail` показывает
+исчерпание каскада, `--outcomes always_ok` — прогон без единого отказа.
 
 ### Демо ретрая: каскад на seed 1
 

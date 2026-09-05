@@ -5,7 +5,11 @@
 #
 # Использование:
 #   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--config PATH]
-#             [--strategy NAME] [--outcomes always_ok|deterministic] [--seed SEED]
+#             [--strategy NAME] [--outcomes NAME] [--seed SEED] [--script PATH]
+#
+# Источники исходов: deterministic (боевой, хеш от seed), scripted (исход каждой
+# пары задан в YAML — для демо и разбора конкретного случая), always_ok и
+# always_fail (вырожденные, для тестов каскада).
 #
 # Ф3 (CFG-2): поведение задаёт config/routing.yml — bin/route читает его на
 # старте, один раз, и передаёт объектом в Routing::Assembly. Ни Planner, ни
@@ -35,6 +39,8 @@ require_relative '../lib/state/providers'
 require_relative '../lib/execution/executor'
 require_relative '../lib/execution/outcome_source/always_ok'
 require_relative '../lib/execution/outcome_source/deterministic'
+require_relative '../lib/execution/outcome_source/always_fail'
+require_relative '../lib/execution/outcome_source/scripted'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
 require_relative '../lib/reporting/console_summary'
@@ -75,10 +81,14 @@ def add_routing_options(opts, options)
 end
 
 def add_outcome_options(opts, options)
-  opts.on('--outcomes NAME', 'Источник исходов: deterministic или always_ok') do |name|
+  opts.on('--outcomes NAME',
+          'Источник исходов: deterministic, always_ok, always_fail, scripted') do |name|
     options[:outcomes] = name
   end
   opts.on('--seed SEED', 'Seed детерминированного источника') { |seed| options[:seed] = seed }
+  opts.on('--script PATH', 'YAML со сценарием исходов (для --outcomes scripted)') do |path|
+    options[:script] = path
+  end
 end
 
 def add_options(opts, options)
@@ -152,6 +162,8 @@ end
 def build_outcome_source(options, providers, config, history)
   case outcome_source_name(options, config)
   when 'always_ok' then Execution::OutcomeSource::AlwaysOk.new
+  when 'always_fail' then Execution::OutcomeSource::AlwaysFail.new
+  when 'scripted' then build_scripted_source(options, config)
   when 'deterministic'
     Execution::OutcomeSource::Deterministic.new(
       seed: outcome_seed(options, config),
@@ -159,8 +171,32 @@ def build_outcome_source(options, providers, config, history)
     )
   else
     fail_with("Неизвестный источник исходов #{outcome_source_name(options, config).inspect}; " \
-              'допустимы deterministic, always_ok')
+              "допустимы #{Config::SchemaRules::OUTCOME_SOURCES.join(', ')}")
   end
+end
+
+# Сценарный источник: исход каждой пары (операция, провайдер) задан явно.
+# Нужен для демо и разбора конкретного случая — «провайдер отказывает, смотрим
+# каскад» без подбора seed, на котором SHA256 случайно даст нужный исход.
+#
+# Сценарий берётся из outcomes.script в конфиге: либо отображением прямо там
+# (основная форма — это такая же настройка, как стратегия), либо строкой-путём
+# к отдельному YAML. Флаг --script перекрывает конфиг и всегда означает путь.
+def build_scripted_source(options, config)
+  script = options[:script] || config.outcomes['script']
+  fail_with('Источник scripted требует сценарий: outcomes.script в конфиге или --script PATH') if
+    script.nil?
+  return Execution::OutcomeSource::Scripted.new(script: script) if script.is_a?(Hash)
+
+  load_script_file(script)
+end
+
+def load_script_file(path)
+  fail_with("Файл сценария не найден: #{path}") unless File.exist?(path)
+
+  Execution::OutcomeSource::Scripted.load(path)
+rescue Psych::SyntaxError => e
+  fail_with("Сценарий #{path}: невалидный YAML — #{e.message}")
 end
 
 def outcome_source_name(options, config)
