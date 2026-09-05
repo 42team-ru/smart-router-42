@@ -15,9 +15,18 @@ module Synthetic
   # конкурируют за шум по стратегии. distribution_band_pp — полуширина
   # допуска по распределению в п.п.: чем патологичнее профиль, тем меньше
   # предсказуема доля шума, и тем шире коридор.
+  #
+  # amount_span_divisor — во сколько раз окно допустимых сумм провайдера уже
+  # диапазона уровня. Двойка (по умолчанию) даёт частичное пересечение окон;
+  # единица — полное, все wide-провайдеры принимают любую сумму уровня.
+  # Это ручка «сколько у стратегии реального выбора»: при делителе 2 и высокой
+  # доле exclusive большинство заявок имеют ровно одного кандидата, и любая
+  # стратегия даёт один и тот же ответ.
   module Profiles
     Profile = Data.define(:name, :exclusive_pct, :poisoned_pct, :orphan_noise_pct,
-                          :distribution_band_pp)
+                          :distribution_band_pp, :amount_span_divisor)
+
+    DEFAULT_AMOUNT_SPAN_DIVISOR = 2
 
     TABLE = {
       'healthy' => { exclusive_pct: 30, poisoned_pct: 0, orphan_noise_pct: 0,
@@ -29,7 +38,21 @@ module Synthetic
       'fallback_heavy' => { exclusive_pct: 30, poisoned_pct: 0, orphan_noise_pct: 30,
                             distribution_band_pp: 8 },
       'pathological' => { exclusive_pct: 40, poisoned_pct: 30, orphan_noise_pct: 15,
-                          distribution_band_pp: 15 }
+                          distribution_band_pp: 15 },
+      # Профиль для сравнения конфигураций, а не для проверки корректности:
+      # мало эксклюзивных провайдеров, полный пул банков и полное пересечение
+      # окон по сумме — у стратегии есть настоящий выбор почти на каждой заявке
+      # (на сгенерированном входе пятеро кандидатов у 94% заявок против одного
+      # у 70% в tight_limits).
+      #
+      # Коридор в 100 п.п. означает, что проверка распределения выключена, и это
+      # не послабление: профиль существует ради того, чтобы распределение
+      # ЗАВИСЕЛО от стратегии, поэтому «правильной» доли здесь нет — conversion
+      # отдаёт почти всё лучшему провайдеру, count_share ведёт к целевым долям,
+      # round_robin делит поровну. Корректность по-прежнему стерегут
+      # конструктивные якоря и проверка hard-constraints.
+      'competitive' => { exclusive_pct: 10, poisoned_pct: 0, orphan_noise_pct: 0,
+                         distribution_band_pp: 100, amount_span_divisor: 1 }
     }.freeze
 
     # Ротация видов «отравления» для poisoned-провайдеров — по одному
@@ -43,7 +66,8 @@ module Synthetic
 
     def fetch(name)
       raw = TABLE.fetch(name.to_s) { raise unknown_profile(name) }
-      Profile.new(name: name.to_s, **raw)
+      Profile.new(name: name.to_s,
+                  amount_span_divisor: DEFAULT_AMOUNT_SPAN_DIVISOR, **raw)
     end
 
     def known = TABLE.keys

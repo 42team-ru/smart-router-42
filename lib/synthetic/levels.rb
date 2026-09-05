@@ -18,6 +18,13 @@ module Synthetic
       'smoke' => { operations: 200, providers: 3, profile: 'healthy',
                    amount_min: 1_000, amount_max: 50_000, mode: :array,
                    full_cli: true, exact_cap: 10_000, broken_ratio: 0.0, run_oracle: true },
+      # Уровень для сравнения конфигураций: небольшой, чтобы гонять его подряд
+      # с разными --config, и на профиле competitive, где у стратегии есть
+      # выбор. Эталон считается сам (операций меньше порога автоматики).
+      'compare' => { operations: 5_000, providers: 6, profile: 'competitive',
+                     amount_min: 1_000, amount_max: 100_000, mode: :array,
+                     full_cli: true, exact_cap: 10_000, broken_ratio: 0.0,
+                     run_oracle: true },
       's' => { operations: 10_000, providers: 8, profile: 'tight_limits',
                amount_min: 500, amount_max: 200_000, mode: :array,
                full_cli: true, exact_cap: 10_000, broken_ratio: 0.0, run_oracle: true },

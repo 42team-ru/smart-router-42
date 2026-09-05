@@ -57,8 +57,12 @@ module Synthetic
 
     def build_groups(roles, level, profile, anchor_count)
       {
-        exclusive: roles[:exclusive].map { |i| exclusive_descriptor(i, level, anchor_count) },
-        wide: roles[:wide].map { |i| wide_descriptor(i, level, pool_size(profile)) },
+        exclusive: roles[:exclusive].map do |i|
+          exclusive_descriptor(i, level, anchor_count, profile.amount_span_divisor)
+        end,
+        wide: roles[:wide].map do |i|
+          wide_descriptor(i, level, pool_size(profile), profile.amount_span_divisor)
+        end,
         poisoned: roles[:poisoned].map { |i| poisoned_descriptor(i, level) }
       }
     end
@@ -101,9 +105,9 @@ module Synthetic
     # (это нужно шуму: несколько wide-провайдеров одновременно допустимы по
     # сумме), но каждое остаётся внутри [amount_min, amount_max] уровня.
     # rubocop:disable-next Metrics/AbcSize -- линейная арифметика окна, дробить только на явно поименованные шаги.
-    def amount_window(index, level)
+    def amount_window(index, level, divisor = Profiles::DEFAULT_AMOUNT_SPAN_DIVISOR)
       span = level.amount_max - level.amount_min
-      provider_span = [span / 2, 1].max
+      provider_span = [span / divisor, 1].max
       denom = [level.providers - 1, 1].max
       offset = ((span - provider_span) * index) / denom
       min = level.amount_min + offset
@@ -114,8 +118,9 @@ module Synthetic
 
     def name_for(index) = format('p%03d', index + 1)
 
-    def exclusive_descriptor(index, level, anchor_count)
-      min, max = amount_window(index, level)
+    def exclusive_descriptor(index, level, anchor_count,
+                             divisor = Profiles::DEFAULT_AMOUNT_SPAN_DIVISOR)
+      min, max = amount_window(index, level, divisor)
       denominator = [anchor_count, 1].max
       amounts = Array.new(anchor_count) { |seat| min + ((seat * (max - min)) / denominator) }
       Descriptor.new(
@@ -126,8 +131,9 @@ module Synthetic
       )
     end
 
-    def wide_descriptor(index, level, pool_size)
-      min, max = amount_window(index, level)
+    def wide_descriptor(index, level, pool_size,
+                        divisor = Profiles::DEFAULT_AMOUNT_SPAN_DIVISOR)
+      min, max = amount_window(index, level, divisor)
       Descriptor.new(
         name: name_for(index), kind: :wide, marker: Banks.marker(index), limit_min: min,
         limit_max: max, single_amounts: [], daily_limit_reject_amount: nil,

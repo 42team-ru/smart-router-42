@@ -80,6 +80,16 @@ bench:
 # в lib/synthetic или lib/bench, не входит в gate.
 ORACLE_FLAG = $(if $(ORACLE),--oracle,)
 
+# Сравнение конфигураций на уровне compare (профиль competitive: у стратегии
+# есть реальный выбор почти на каждой заявке). Для каждого конфига из
+# config/examples печатает распределение и отклонение — так видно, какая
+# настройка ведёт к целевым долям, а какая нет.
+#   make bench-configs                      # все стратегии из реестра
+#   make bench-configs CONFIGS="a.yml b.yml"  # конкретные конфиги
+CONFIGS ?=
+bench-configs:
+	@bash scripts/bench_configs.sh $(CONFIGS)
+
 bench-all:
 	@for lvl in smoke s m; do \
 		bundle exec ruby bin/bench --level $$lvl --seed $(SEED) || exit 1; \
