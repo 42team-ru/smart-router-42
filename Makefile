@@ -1,27 +1,27 @@
 # Единственная точка входа для агентов и людей.
 #
-#   make gate      ворота: спеки + линтер. Определение готовности любой задачи
+#   make check     спеки + линтер + проверка детерминизма
 #   make validate  валидатор организаторов на публичной очереди
 #   make route     боевой прогон, q=<файл очереди>
 #
 # Гейт и валидатор — разные вещи. Гейт говорит «наш код не сломан»,
 # валидатор — «наш вывод примут». Зелёными должны быть оба.
 
-.DEFAULT_GOAL := gate
+.DEFAULT_GOAL := check
 
 QUEUE ?= reference/data/operations_queue_10.json
 OUT   ?= out/routing_decisions_test.json
 
 # Уровни синтетического генератора/бенчмарка (lib/synthetic, lib/bench):
-# smoke/s/m/l/xl/insane — см. Synthetic::Levels. gen/bench НЕ входят в gate:
+# smoke/s/m/l/xl/insane — см. Synthetic::Levels. gen/bench НЕ входят в check:
 # гейт обязан оставаться быстрым, l/xl/insane — минуты и десятки минут.
 LEVEL   ?= smoke
 SEED    ?= 42
 GEN_DIR ?= tmp/bench/$(LEVEL)
 
-.PHONY: gate test lint fmt validate route determinism no-random install deliver gen bench bench-all help install-swagger-ui openapi-check openapi-embed serve
+.PHONY: check test lint fmt validate route determinism no-random install deliver gen bench bench-all help install-swagger-ui openapi-check openapi-embed serve
 
-gate: test lint no-random
+check: test lint no-random
 
 test:
 	bundle exec rspec
@@ -77,7 +77,7 @@ bench:
 	bundle exec ruby bin/bench --level $(LEVEL) --seed $(SEED) --dir $(GEN_DIR) $(ORACLE_FLAG)
 
 # Быстрый прогон малых уровней подряд — для ручной проверки после правок
-# в lib/synthetic или lib/bench, не входит в gate.
+# в lib/synthetic или lib/bench, не входит в check.
 ORACLE_FLAG = $(if $(ORACLE),--oracle,)
 
 # Сравнение конфигураций на уровне compare (профиль competitive: у стратегии
@@ -104,7 +104,7 @@ bench-all:
 	done
 
 help:
-	@echo "gate test lint fmt validate route determinism no-random install deliver"
+	@echo "check test lint fmt validate route determinism no-random install deliver"
 	@echo "gen bench bench-all (LEVEL=smoke|s|m|l|xl|insane, SEED=42)"
 	@echo "openapi-check openapi-embed install-swagger-ui serve"
 

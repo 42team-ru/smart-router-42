@@ -1,9 +1,9 @@
-name: gate
+name: check
 
 on: [push, pull_request]
 
 jobs:
-  gate:
+  check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -12,7 +12,7 @@ jobs:
           ruby-version: '3.3'
           bundler-cache: true
 
-      - run: make gate
+      - run: make check
 
       - run: make validate
 

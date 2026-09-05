@@ -8,7 +8,7 @@
 долей трафика, объясняет каждое решение числами и переходит к следующему
 кандидату при отказе.
 
-[![gate](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml/badge.svg)](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml)
+[![check](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml/badge.svg)](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml)
 ![Ruby 3.3](https://img.shields.io/badge/Ruby-3.3-CC342D?logo=ruby&logoColor=white)
 ![валидатор 29/29](https://img.shields.io/badge/валидатор-29%2F29-2ea44f)
 ![детерминизм](https://img.shields.io/badge/детерминизм-побайтовый-2ea44f)
@@ -87,7 +87,7 @@ make validate    # прогон + валидатор организаторов
 |---|---|
 | `make route` | прогон на публичной очереди, выход в `out/` |
 | `make deliver` | тот же прогон, выход в корень репозитория |
-| `make gate` | ворота: `rspec` + `rubocop` + проверка отсутствия случайности |
+| `make check` | `rspec` + `rubocop` + проверка отсутствия случайности |
 | `make validate` | прогон + валидатор организаторов |
 | `make determinism` | два прогона подряд и побайтовый `diff` |
 | `make gen LEVEL=m` | сгенерировать синтетическую нагрузку |
@@ -126,7 +126,7 @@ bundle exec bin/route <queue.json> [--out-dir DIR] [--providers PATH]
 **Детерминизм.** Два прогона на одном входе дают побайтово одинаковый выход.
 Исход попытки — не `rand`, а `SHA256(seed:операция:провайдер:попытка)`.
 В решающем пути запрещены `rand`, `shuffle`, `sample` и обращения к текущему
-времени — проверяется статически на каждом прогоне ворот.
+времени — проверяется статически на каждом прогоне `make check`.
 
 > Устройство модулей, контракты, форматы и инварианты —
 > **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)**

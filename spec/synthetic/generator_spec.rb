@@ -16,12 +16,12 @@ require 'execution/outcome_source/deterministic'
 
 Routing::Strategies.load_all!
 
-# Гейт-спек генератора: только уровень smoke (200 операций), доли секунды.
+# Быстрый спек генератора: только уровень smoke (200 операций), доли секунды.
 # Не про распределение и не про бенчмарк — про то, что конструктивный оракул
 # не разошёлся с настоящим Routing::Constraints, а сгенерённый вход читается
-# штатными загрузчиками. l/xl/insane сюда не входят: make gate обязан
+# штатными загрузчиками. l/xl/insane сюда не входят: make check обязан
 # оставаться быстрым (см. Makefile).
-# rubocop:disable RSpec/DescribeClass -- гейт-спек генератора, а не класс
+# rubocop:disable RSpec/DescribeClass -- спек генератора, а не класс
 RSpec.describe 'Synthetic generator (smoke)' do
   # rubocop:enable RSpec/DescribeClass
   def generate(seed: '42')
