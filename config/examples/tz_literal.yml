@@ -1,0 +1,41 @@
+# Демонстрация буквального прочтения ТЗ (docs/plans/P6/P7): обе альтернативные
+# ветки каскада включены разом -- exhausted: fallback_provider (исчерпанный
+# каскад подхватывает spacepayments) и on_timeout: continue (таймаут не
+# останавливает каскад, резерв держится и попытки продолжаются). Боевой
+# конфиг (config/routing.yml) держит дефолты last_candidate/stop -- это не он.
+#
+# Замер на публичной очереди (docs/plans/P6/P7_настраиваемый_fallback.md,
+# раздел «Замеры»): обе ветки безопасны и на seed 42 не меняют ни одного
+# решения (нет ни исчерпания рядом отказов, ни expired не на последнем
+# кандидате каскада), но это свойство данных очереди, а не гарантия кода.
+strategy: count_share
+layers: []
+
+goals:
+  budget_headroom: { psi_threshold_micro: 100000 }
+  share_ceiling: { tolerance_bp: 0 }
+
+outcomes:
+  source: deterministic
+  seed: 42
+  calibrate_from_history: true
+
+amount_ranges:
+  - { from: 500, to: 50000, prefer: payflow }
+  - { from: 50001, to: 100000, prefer: vipay }
+  - { from: 100001, to: null, prefer: quickpay }
+
+obligations:
+  payflow: { daily_turnover_min: 2000000 }
+  vipay: { daily_turnover_max: 5000000 }
+
+rate_limits:
+  vipay: 7
+  payflow: 10
+  quickpay: 15
+
+cascade:
+  exhausted: fallback_provider
+  on_timeout: continue
+
+fallback_provider: spacepayments
