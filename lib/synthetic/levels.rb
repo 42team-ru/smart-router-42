@@ -25,6 +25,14 @@ module Synthetic
                      amount_min: 1_000, amount_max: 100_000, mode: :array,
                      full_cli: true, exact_cap: 10_000, broken_ratio: 0.0,
                      run_oracle: true },
+      # Тот же профиль competitive, но масштаб m: сравнение конфигураций на
+      # ста тысячах заявок, где успевают сработать дневные лимиты и накопиться
+      # доли. Эталон по умолчанию не считается (порог автоматики 10 000
+      # операций) — включается флагом ORACLE=1.
+      'compare_m' => { operations: 100_000, providers: 20, profile: 'competitive',
+                       amount_min: 1_000, amount_max: 1_000_000, mode: :array,
+                       full_cli: true, exact_cap: 20_000, broken_ratio: 0.0,
+                       run_oracle: true },
       's' => { operations: 10_000, providers: 8, profile: 'tight_limits',
                amount_min: 500, amount_max: 200_000, mode: :array,
                full_cli: true, exact_cap: 10_000, broken_ratio: 0.0, run_oracle: true },

@@ -84,12 +84,16 @@ ORACLE_FLAG = $(if $(ORACLE),--oracle,)
 # есть реальный выбор почти на каждой заявке). Для каждого конфига из
 # config/examples печатает распределение и отклонение — так видно, какая
 # настройка ведёт к целевым долям, а какая нет.
-#   make bench-configs                        # все стратегии из реестра
-#   make bench-configs CONFIGS=config          # все *.yml каталога, рекурсивно
-#   make bench-configs CONFIGS="a.yml b.yml"   # конкретные файлы
+#   make bench-configs                          # все стратегии, уровень compare
+#   make bench-configs LEVEL=compare_m           # то же на 100 000 операций
+#   make bench-configs CONFIGS=config            # все *.yml каталога, рекурсивно
+#   make bench-configs CONFIGS="a.yml b.yml"     # конкретные файлы
+#   make bench-configs LEVEL=compare_m ORACLE=1  # добавить competitive_ratio
 CONFIGS ?=
 bench-configs:
-	@bundle exec ruby scripts/bench_configs.rb $(CONFIGS)
+	@LEVEL=$(if $(filter compare,$(LEVEL)),compare,$(or $(LEVEL),compare)) \
+	 SEED=$(SEED) $(if $(ORACLE),ORACLE=1,) \
+	 bundle exec ruby scripts/bench_configs.rb $(CONFIGS)
 
 bench-all:
 	@for lvl in smoke s m; do \

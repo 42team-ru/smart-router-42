@@ -7,10 +7,15 @@
 #   scripts/bench_configs.rb config          все *.yml в каталоге, рекурсивно
 #   scripts/bench_configs.rb a.yml b.yml     конкретные файлы
 #
-# Гоняет уровень compare (профиль competitive): у стратегии там есть реальный
+# Уровень задаётся переменной LEVEL: compare (5 000 операций) или compare_m
+# (100 000). Оба стоят на профиле competitive, где у стратегии есть реальный
 # выбор почти на каждой заявке. На остальных уровнях допуск сужен намеренно —
 # до 70% заявок имеют ровно одного кандидата, и любые конфиги дают там один и
 # тот же результат.
+#
+# ORACLE=1 добавляет competitive_ratio. На compare он считается сам (операций
+# меньше порога автоматики), на compare_m требует флага: эталон держит все пары
+# в памяти.
 #
 # Таблица печатается отсюда, а не из bash: bash printf выравнивает по БАЙТАМ, и
 # кириллические заголовки разъезжают колонки. Ruby format считает символы.
@@ -22,8 +27,12 @@ require 'tmpdir'
 ROOT = File.expand_path('..', __dir__)
 Dir.chdir(ROOT)
 
-LEVEL = 'compare'
+# Уровень задаётся переменной окружения: compare (5 000 операций, быстрый) или
+# compare_m (100 000, там успевают сработать дневные лимиты). Оба на профиле
+# competitive — на остальных профилях допуск сужен и конфиги неразличимы.
+LEVEL = ENV.fetch('LEVEL', 'compare')
 SEED = ENV.fetch('SEED', '1')
+ORACLE = ENV.key?('ORACLE')
 DIR = File.join('tmp', 'bench', LEVEL)
 
 COLUMNS = [
@@ -69,7 +78,7 @@ def collect_configs(args, tmp)
   return strategy_configs(tmp) if args.empty?
 
   args.flat_map do |arg|
-    File.directory?(arg) ? Dir.glob(File.join(arg, '**', '*.yml')) : [arg]
+    File.directory?(arg) ? Dir.glob(File.join(arg, '**', '*.yml')).sort : [arg]
   end
 end
 
@@ -85,8 +94,10 @@ def strategy_configs(tmp)
 end
 
 def run_config(path)
-  out, = Open3.capture2e('bundle', 'exec', 'ruby', 'bin/bench', '--level', LEVEL,
-                         '--seed', SEED, '--dir', DIR, '--config', path)
+  args = ['bundle', 'exec', 'ruby', 'bin/bench', '--level', LEVEL,
+          '--seed', SEED, '--dir', DIR, '--config', path]
+  args << '--oracle' if ORACLE
+  out, = Open3.capture2e(*args)
   out
 end
 
@@ -127,7 +138,8 @@ Dir.mktmpdir do |tmp|
   configs = collect_configs(ARGV, tmp)
   abort('не найдено ни одного конфига') if configs.empty?
 
-  puts "уровень #{LEVEL}, seed #{SEED}, конфигов: #{configs.size}"
+  oracle_note = ORACLE ? 'с эталоном' : 'без эталона (ORACLE=1 включит)'
+  puts "уровень #{LEVEL}, seed #{SEED}, конфигов: #{configs.size}, #{oracle_note}"
   puts row(COLUMNS.map(&:first))
   configs.each { |path| print_row(path, parse_run(run_config(path))) }
   puts format(LEGEND, total_operations)
