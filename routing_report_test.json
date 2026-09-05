@@ -36,23 +36,23 @@
     "vipay": {
       "amount": 102000,
       "share_pct": 26.4,
-      "target_pct": 40,
+      "target_pct": 50,
       "achievable_pct": null,
-      "deviation_pp": -13.6
+      "deviation_pp": -23.6
     },
     "payflow": {
       "amount": 88800,
       "share_pct": 23.0,
-      "target_pct": 35,
+      "target_pct": 30,
       "achievable_pct": null,
-      "deviation_pp": -12.0
+      "deviation_pp": -7.0
     },
     "quickpay": {
       "amount": 195000,
       "share_pct": 50.5,
-      "target_pct": 25,
+      "target_pct": 20,
       "achievable_pct": null,
-      "deviation_pp": 25.5
+      "deviation_pp": 30.5
     },
     "spacepayments": {
       "amount": 0,
@@ -140,5 +140,32 @@
     "payflow: свободно 100 000 ₽ при среднем чеке 38 580 ₽ — снизить traffic_percentage 35 → 20 до сброса дневного лимита",
     "quickpay: conversion_24h заявлена 0.79, наблюдаемая 0.675 по истории — пересчитать по факту",
     "retarget: паспортные цели (vipay 40%, payflow 35% → 30%, quickpay 25% → 30%) недостижимы (payflow ограничен дневным лимитом; quickpay форсирован отсутствием альтернатив у части операций) — максимальное отклонение падает с 5 до 0 п.п."
-  ]
+  ],
+  "comparison": {
+    "baseline": "count_share",
+    "variants": {
+      "round_robin": {
+        "delivered": 10,
+        "fallback_used": 0,
+        "retried": 0,
+        "max_deviation_pp": 40.0,
+        "max_deviation_from_target_pp": 45.0
+      },
+      "count_share": {
+        "delivered": 10,
+        "fallback_used": 0,
+        "retried": 0,
+        "max_deviation_pp": 0.0,
+        "max_deviation_from_target_pp": 5.0
+      },
+      "count_share+layers": {
+        "delivered": 10,
+        "fallback_used": 0,
+        "retried": 0,
+        "max_deviation_pp": 20.0,
+        "max_deviation_from_target_pp": 25.0
+      }
+    },
+    "note": "офлайн-сравнение: тот же онлайн-проход по очереди под другой стратегией/слоями, каждый вариант на своём состоянии; результат идёт только в отчёт и в консоль, в принятие решений не входит"
+  }
 }
