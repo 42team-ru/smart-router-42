@@ -74,12 +74,17 @@ RSpec.describe Routing::Layers::BudgetHeadroom do
     expect(second.map(&:name)).to eq(%w[quickpay vipay payflow])
   end
 
-  it 'объясняет порог, psi и отклонение числами' do
+  # Числа объяснения — в одном масштабе: psi, порог и отставание от порога.
+  # Сырые миллионные доли наружу не выходят: «отклонение 67216» рядом с
+  # «psi 0.033» читается как взятое с потолка.
+  it 'объясняет порог, psi и отставание в одних единицах' do
     ranked_before = [by_name.fetch('vipay'), by_name.fetch('payflow'), by_name.fetch('quickpay')]
     ranked_after = layer.adjust(ranked_before, build_operation, nil)
 
     expect(layer.explain(ranked_before, ranked_after, build_operation, nil))
-      .to include('0.033', '0.100', '67216')
+      .to include('0.033', '0.100', 'ниже порога 0.100 на 0.067')
+    expect(layer.explain(ranked_before, ranked_after, build_operation, nil))
+      .not_to include('67216')
   end
 
   it 'отклоняет нецелевой порог за пределами целого диапазона' do

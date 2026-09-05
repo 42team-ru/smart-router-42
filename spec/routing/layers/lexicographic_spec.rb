@@ -24,7 +24,7 @@ RSpec.describe 'лексикографический порядок слоёв' 
     reversed = run_configuration('goals_reversed.yml')
 
     expect([adwords.fetch(:selected), reversed.fetch(:selected)]).to eq(%w[quickpay payflow])
-    expect(adwords.fetch(:details)).to include('отклонение 67474', 'превышение 1945 bp')
+    expect(adwords.fetch(:details)).to include('ниже порога 0.100 на 0.067', 'превышение 1945 bp')
     expected = ['максимальное превышение 1945 bp', 'минимальный psi 0.033']
     expect(reversed.fetch(:details)).to include(*expected)
     expect(senior_deviation(adwords, 'quickpay')).to be <= senior_deviation(adwords, 'payflow')

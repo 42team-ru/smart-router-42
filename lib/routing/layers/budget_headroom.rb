@@ -117,11 +117,22 @@ module Routing
         ranked.each_with_index.to_h { |provider, index| [provider.name, index + 1] }
       end
 
+      # Отклонение печатается в тех же единицах, что и psi с порогом, а не
+      # сырыми миллионными долями: три числа одной формулы должны читаться в
+      # одном масштабе, иначе «отклонение 67216» рядом с «psi 0.033» выглядит
+      # взятым с потолка. Внутри сортировки по-прежнему целые.
       def provider_details(provider, index, after_positions, state)
         psi = psi_micro(provider, state)
         deviation_value = deviation(provider, nil, state)
-        "#{provider.name} psi #{format_micro(psi)} (отклонение #{deviation_value}) " \
+        "#{provider.name} psi #{format_micro(psi)} #{gap_text(psi, deviation_value)} " \
           "-> с #{index + 1} на #{after_positions.fetch(provider.name)}"
+      end
+
+      def gap_text(_psi, deviation_value)
+        return "(запас есть, psi ≥ порога #{format_micro(psi_threshold_micro)})" if
+          deviation_value.zero?
+
+        "(ниже порога #{format_micro(psi_threshold_micro)} на #{format_micro(deviation_value)})"
       end
 
       def format_micro(value)
