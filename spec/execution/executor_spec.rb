@@ -173,6 +173,130 @@ RSpec.describe Execution::Executor do
     it_behaves_like 'state invariants'
   end
 
+  describe 'П7: exhausted: :last_candidate (дефолт, явный kwarg) — регресс поведения' do
+    let(:executor) do
+      described_class.new(outcomes: Execution::OutcomeSource::AlwaysFail.new,
+                          exhausted: :last_candidate)
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow, quickpay],
+                             skipped: [])
+    end
+
+    it 'selected = последний реальный кандидат, попыток ровно 3, spacepayments не подключается' do
+      expect(outcome.result).to eq(:rejected)
+      expect(outcome.selected.name).to eq('quickpay')
+      expect(outcome.attempts.size).to eq(3)
+      expect(outcome.attempts.map { |a| a.provider.name }).not_to include('spacepayments')
+      expect(outcome.attempts.map(&:decision).uniq - %w[selected skipped]).to be_empty
+    end
+
+    it_behaves_like 'state invariants'
+  end
+
+  describe 'П7: exhausted: :fallback_provider — каскад исчерпан обычными отказами' do
+    let(:executor) do
+      described_class.new(
+        outcomes: script_source(
+          'op_1' => { 'vipay' => :rejected, 'payflow' => :rejected,
+                      'quickpay' => :rejected, 'spacepayments' => :approved }
+        ),
+        exhausted: :fallback_provider
+      )
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow, quickpay],
+                             skipped: [])
+    end
+
+    it 'добавляет попытку на spacepayments с decision selected, reason fallback_after_cascade' do
+      expect(outcome.result).to eq(:approved)
+      expect(outcome.selected.name).to eq('spacepayments')
+      expect(outcome.attempts.size).to eq(4)
+      expect(outcome.attempts.map { |a| a.provider.name })
+        .to eq(%w[vipay payflow quickpay spacepayments])
+
+      fallback_attempt = outcome.attempts.last
+      expect(fallback_attempt.decision).to eq('selected')
+      expect(fallback_attempt.reason).to eq('fallback_after_cascade')
+      expect(fallback_attempt.details).to eq('3 кандидата отказали из 3, каскад исчерпан')
+      expect(fallback_attempt.attempt_no).to eq(4)
+      expect(state_after.daily_approved_amount('spacepayments')).to eq(10_000)
+    end
+
+    it_behaves_like 'state invariants'
+  end
+
+  describe 'П7: on_timeout: :stop (дефолт, явный kwarg) — regress сегодняшнего поведения' do
+    let(:executor) do
+      described_class.new(outcomes: script_source('op_1' => { 'vipay' => :expired }),
+                          on_timeout: :stop)
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow], skipped: [])
+    end
+
+    it 'expired завершает каскад одной попыткой, hold применён один раз' do
+      expect(outcome.result).to eq(:expired)
+      expect(outcome.selected.name).to eq('vipay')
+      expect(outcome.attempts.size).to eq(1)
+      expect { state_after.resolve_hold(vipay, operation, :rejected) }.not_to raise_error
+    end
+  end
+
+  describe 'П7: on_timeout: :continue — expired держит резерв, каскад продолжается до approved' do
+    let(:executor) do
+      described_class.new(
+        outcomes: script_source('op_1' => { 'vipay' => :expired, 'payflow' => :approved }),
+        on_timeout: :continue
+      )
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow], skipped: [])
+    end
+
+    it 'selected = второй провайдер (approved), held-резерв первого остаётся' do
+      expect(outcome.result).to eq(:approved)
+      expect(outcome.selected.name).to eq('payflow')
+      expect(outcome.attempts.map { |a| [a.provider.name, a.result] })
+        .to eq([%w[vipay expired], %w[payflow approved]])
+      expect(outcome.attempts.map(&:decision).uniq - %w[selected skipped]).to be_empty
+
+      # Резерв на vipay не освобождён без статус-чека -- значит он всё ещё
+      # held, и resolve_hold обязан отработать (не смоделирован моком).
+      expect { state_after.resolve_hold(vipay, operation, :rejected) }.not_to raise_error
+      expect(state_after.daily_approved_amount('payflow')).to eq(10_000)
+    end
+  end
+
+  describe 'П7: on_timeout: :continue — все последующие rejected → selected = таймаут-провайдер' do
+    let(:executor) do
+      described_class.new(
+        outcomes: script_source(
+          'op_1' => { 'vipay' => :expired, 'payflow' => :rejected, 'quickpay' => :rejected }
+        ),
+        on_timeout: :continue,
+        # exhausted намеренно fallback_provider: правило exhausted не обязано
+        # применяться, когда каскад закончился condicional-успешным таймаутом,
+        # а не полным отказом -- эта комбинация проверяет именно приоритет.
+        exhausted: :fallback_provider
+      )
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow, quickpay],
+                             skipped: [])
+    end
+
+    it 'selected = первый таймаут-провайдер, result expired, exhausted не применяется' do
+      expect(outcome.result).to eq(:expired)
+      expect(outcome.selected.name).to eq('vipay')
+      expect(outcome.attempts.size).to eq(3)
+      expect(outcome.attempts.map { |a| a.provider.name }).not_to include('spacepayments')
+    end
+
+    it_behaves_like 'state invariants'
+  end
+
   describe 'skipped из плана идут первыми в attempts' do
     let(:violation) { Routing::Violation.new(reason: 'amount_exceeds_limit', details: 'x') }
     let(:executor) { described_class.new(outcomes: Execution::OutcomeSource::AlwaysOk.new) }

@@ -24,6 +24,7 @@ module Routing
       best_target_adherence
       next_in_cascade
       fallback_no_eligible_provider
+      fallback_after_cascade
     ].freeze
   end
 end
