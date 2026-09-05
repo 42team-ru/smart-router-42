@@ -41,18 +41,32 @@ module Routing
     class BudgetHeadroom < Base
       MICRO = 1_000_000
       TAYLOR_TERMS = 16
-      DEFAULT_PSI_THRESHOLD_MICRO = 100_000
-      CONFIG_KEY = 'psi_threshold_micro'
+
+      # Единственная настройка слоя: с какого израсходованного процента
+      # дневного лимита он начинает придерживать провайдера.
+      #
+      #   activates_at_spent_pct: 90   ← вмешиваемся, когда потрачено 90% и больше
+      #   activates_at_spent_pct: 70   ← раньше и осторожнее
+      #   activates_at_spent_pct: 100  ← фактически выключено: придерживаем только
+      #                                  того, у кого лимит уже выбран полностью
+      #
+      # Значение — целые проценты 0..100. Внутри оно один раз переводится в порог
+      # по той же кривой psi, по которой считаются сами провайдеры: порог — это
+      # psi провайдера, потратившего ровно столько процентов. Поэтому сравнение
+      # «psi ниже порога» и означает буквально «потрачено больше, чем задано».
+      DEFAULT_ACTIVATES_AT_SPENT_PCT = 90
+      CONFIG_KEY = 'activates_at_spent_pct'
 
       def self.from_config(config)
         goals = config.goals.fetch('budget_headroom', {})
-        new(psi_threshold_micro: goals.fetch(CONFIG_KEY, DEFAULT_PSI_THRESHOLD_MICRO))
+        new(activates_at_spent_pct: goals.fetch(CONFIG_KEY, DEFAULT_ACTIVATES_AT_SPENT_PCT))
       end
 
-      def initialize(psi_threshold_micro: DEFAULT_PSI_THRESHOLD_MICRO)
+      def initialize(activates_at_spent_pct: DEFAULT_ACTIVATES_AT_SPENT_PCT)
         super()
-        validate_threshold!(psi_threshold_micro)
-        @psi_threshold_micro = psi_threshold_micro
+        validate_spent_pct!(activates_at_spent_pct)
+        @activates_at_spent_pct = activates_at_spent_pct
+        @psi_threshold_micro = psi_for_spent_pct(activates_at_spent_pct)
       end
 
       def name = 'budget_headroom'
@@ -79,7 +93,7 @@ module Routing
 
       private
 
-      attr_reader :psi_threshold_micro
+      attr_reader :psi_threshold_micro, :activates_at_spent_pct
 
       def live_daily_approved(provider, state)
         if state.respond_to?(:daily_approved_amount)
@@ -101,8 +115,8 @@ module Routing
       end
 
       def no_reordering_details(minimum)
-        "#{name}: без перестановки, минимальный psi #{format_micro(minimum)}; " \
-          "порог #{format_micro(psi_threshold_micro)}"
+        "#{name}: без перестановки, минимальный запас #{format_micro(minimum)}; " \
+          "#{threshold_text}"
       end
 
       def reordered_details(ranked_before, ranked_after, state)
@@ -110,7 +124,15 @@ module Routing
         providers = ranked_before.each_with_index.map do |provider, index|
           provider_details(provider, index, after_positions, state)
         end
-        "#{name}: #{providers.join('; ')}; порог #{format_micro(psi_threshold_micro)}"
+        "#{name}: #{providers.join('; ')}; #{threshold_text}"
+      end
+
+      # Порог называется и в процентах, и в единицах psi: процент отвечает на
+      # «когда слой вмешивается», значение psi — на «с чем сравниваются числа
+      # рядом». Одно без другого заставляет читателя догадываться.
+      def threshold_text
+        "порог: вмешиваемся с #{activates_at_spent_pct}% израсходованного лимита " \
+          "(psi #{format_micro(psi_threshold_micro)})"
       end
 
       def positions(ranked)
@@ -129,10 +151,9 @@ module Routing
       end
 
       def gap_text(_psi, deviation_value)
-        return "(запас есть, psi ≥ порога #{format_micro(psi_threshold_micro)})" if
-          deviation_value.zero?
+        return '(запас есть, порог не пройден)' if deviation_value.zero?
 
-        "(ниже порога #{format_micro(psi_threshold_micro)} на #{format_micro(deviation_value)})"
+        "(ниже порога на #{format_micro(deviation_value)})"
       end
 
       def format_micro(value)
@@ -141,12 +162,20 @@ module Routing
         format('0.%03d', (value + 500) / 1000)
       end
 
-      def validate_threshold!(value)
-        return if value.is_a?(Integer) && value.between?(0, MICRO)
+      def validate_spent_pct!(value)
+        return if value.is_a?(Integer) && value.between?(0, 100)
 
         raise ArgumentError,
-              "goals.budget_headroom.#{CONFIG_KEY} must be Integer 0..#{MICRO}, " \
-              "got #{value.inspect}"
+              "goals.budget_headroom.#{CONFIG_KEY} must be Integer 0..100 " \
+              "(процент израсходованного дневного лимита), got #{value.inspect}"
+      end
+
+      # Порог в тех же единицах, что и psi провайдеров: psi того, кто потратил
+      # ровно activates_at_spent_pct процентов лимита. Считается один раз в
+      # конструкторе — та же целочисленная кривая, без float.
+      def psi_for_spent_pct(percent)
+        x = 1 - Rational(percent, 100)
+        ((1 - taylor_exp_neg(x)) * MICRO).round
       end
     end
 

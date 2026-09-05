@@ -4,7 +4,7 @@ strategy: count_share
 layers: [budget_headroom, share_ceiling]
 
 goals:
-  budget_headroom: { psi_threshold_micro: 100000 }
+  budget_headroom: { activates_at_spent_pct: 90 }
   share_ceiling: { tolerance_bp: 0 }
 
 outcomes:

@@ -26,12 +26,14 @@ RSpec.describe Routing::Layers::BudgetHeadroom do
     )
   end
 
-  it 'считает deviation при пороге 0.100' do
+  it 'считает deviation при пороге 90% израсходованного лимита' do
     deviations = %w[payflow vipay quickpay].to_h do |name|
       [name, layer.deviation(by_name.fetch(name), build_operation, nil)]
     end
 
-    expect(deviations).to eq('payflow' => 67_216, 'vipay' => 0, 'quickpay' => 0)
+    # Порог 90% = psi 0.095; payflow потратил 96.7% (psi 0.033) и отстаёт на
+    # 0.062, у остальных запас есть.
+    expect(deviations).to eq('payflow' => 62_379, 'vipay' => 0, 'quickpay' => 0)
   end
 
   it 'обрабатывает T=0, T=1 и перерасход' do
@@ -82,14 +84,14 @@ RSpec.describe Routing::Layers::BudgetHeadroom do
     ranked_after = layer.adjust(ranked_before, build_operation, nil)
 
     expect(layer.explain(ranked_before, ranked_after, build_operation, nil))
-      .to include('0.033', '0.100', 'ниже порога 0.100 на 0.067')
+      .to include('0.033', 'ниже порога на 0.062', 'вмешиваемся с 90%')
     expect(layer.explain(ranked_before, ranked_after, build_operation, nil))
-      .not_to include('67216')
+      .not_to include('62379')
   end
 
   it 'отклоняет нецелевой порог за пределами целого диапазона' do
-    expect { described_class.new(psi_threshold_micro: 1_000_001) }
-      .to raise_error(ArgumentError, /psi_threshold_micro.*1000001/)
+    expect { described_class.new(activates_at_spent_pct: 101) }
+      .to raise_error(ArgumentError, /activates_at_spent_pct.*101/)
   end
 
   it 'не использует Float, to_f или Math' do

@@ -25,7 +25,7 @@ layers: [] # боевой выбор: ψ-слой меняет целевое р
 
 # Пороги целей для слоёв (lib/routing/layers). Инертны, пока layers пуст.
 goals:
-  budget_headroom: { psi_threshold_micro: 100000 } # ψ = 0.100
+  budget_headroom: { activates_at_spent_pct: 90 } # придерживаем с 90% лимита
   share_ceiling: { tolerance_bp: 0 }
 
 outcomes:

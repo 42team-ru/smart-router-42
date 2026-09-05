@@ -65,7 +65,7 @@ RSpec.describe 'сценарий-ловушка бюджета (T-4)' do
     # deviation(vipay) остаётся 0 весь прогон (его psi_micro на старте —
     # 632_121, на порядок больше порога). budget_headroom поэтому переранжирует
     # payflow ниже vipay сразу, до того как payflow вообще будет затронут.
-    let(:psi_layer) { Routing::Layers::BudgetHeadroom.new(psi_threshold_micro: 200_000) }
+    let(:psi_layer) { Routing::Layers::BudgetHeadroom.new(activates_at_spent_pct: 78) }
     let(:layers) { Routing::LayerStack.new([psi_layer]) }
 
     it 'обе операции уходят в vipay — payflow не выбирается ни разу' do

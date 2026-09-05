@@ -550,7 +550,7 @@ spec/                              unit + каскадные сценарии + 
 strategy: count_share
 layers: [budget_headroom, share_ceiling]        # порядок = старшинство при конфликте
 goals:
-  budget_headroom: { psi_threshold_micro: 100000 }
+  budget_headroom: { activates_at_spent_pct: 90 }
   share_ceiling: { tolerance_bp: 0 }
 outcomes: { source: deterministic, seed: 42, calibrate_from_history: true }
 amount_ranges:
