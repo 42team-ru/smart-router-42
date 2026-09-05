@@ -1,0 +1,27 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# HTTP-сервис поверх CLI-ядра. Puma workers=1, threads=1 — атомарность
+# бесплатно, детерминизм гарантирован конструкцией (см. docs/plans/HTTP_SERVICE.md).
+#
+# Использование:
+#   bin/serve                       # порт из config/service.yml
+#   PORT=5000 bin/serve             # переопределение порта
+#   SERVICE_CONFIG=path bin/serve   # альтернативный service.yml
+
+require 'yaml'
+require 'puma/cli'
+
+service_config_path = ENV.fetch('SERVICE_CONFIG', 'config/service.yml')
+raw = YAML.safe_load_file(service_config_path)
+port = ENV['PORT'] || raw.dig('service', 'port') || 4567
+
+args = [
+  '-w', '0',
+  '-t', '1:1',
+  '-p', port.to_s,
+  '--tag', 'smart-router-42',
+  File.expand_path('../config.ru', __dir__)
+]
+
+Puma::CLI.new(args).run

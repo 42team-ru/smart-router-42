@@ -1,5 +1,6 @@
 /out/
 /tmp/
+/data/
 /.bundle/
 /vendor/bundle/
 .rspec_status

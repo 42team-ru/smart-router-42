@@ -12,7 +12,7 @@
 QUEUE ?= reference/data/operations_queue_10.json
 OUT   ?= out/routing_decisions_test.json
 
-.PHONY: gate test lint fmt validate route determinism no-random install deliver help install-swagger-ui openapi-check openapi-embed
+.PHONY: gate test lint fmt validate route determinism no-random install deliver help install-swagger-ui openapi-check openapi-embed serve
 
 gate: test lint no-random
 
@@ -55,7 +55,12 @@ install:
 
 help:
 	@echo "gate test lint fmt validate route determinism no-random install deliver"
-	@echo "openapi-check openapi-embed install-swagger-ui"
+	@echo "openapi-check openapi-embed install-swagger-ui serve"
+
+# HTTP-сервис. Puma workers=1 threads=1 — детерминизм гарантирован конструкцией.
+# Порт: config/service.yml (или PORT=...); Swagger UI на /swagger.
+serve:
+	bundle exec bin/serve
 
 # Проверка синтаксиса OpenAPI-спеки (только YAML-парсинг, без semantic-валидации).
 openapi-check:

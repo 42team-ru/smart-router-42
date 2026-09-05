@@ -1,0 +1,14 @@
+# Настройки HTTP-обвязки над CLI-ядром (bin/serve, lib/api/**).
+#
+# domain-config (стратегия, слои, seed) — это config/routing.yml.
+# service.yml — только operational: порт, путь к SQLite, retention.
+#
+# Правки читаются на старте bin/serve и передаются в Api::App/Api::Gateway.
+
+service:
+  port: 4567
+  db_path: "./data/decisions.db"
+  retention_hours: 24
+  swagger_path: "./public/swagger"
+  openapi_path: "./docs/openapi.yaml"
+  history_path: "./reference/data/operations_history.csv"
