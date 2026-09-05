@@ -1,2 +1,7 @@
 * text=auto eol=lf
 *.sh text eol=lf
+
+# Вендоренный swagger-ui — чужой минифицированный JS/CSS, 2.0 МБ против 0.5 МБ
+# нашего Ruby. Без этой пометки GitHub Linguist считает репозиторий
+# JavaScript-овым, а правило хакатона — «большинство кода на Ruby».
+public/swagger/** linguist-vendored
