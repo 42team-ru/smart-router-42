@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module Routing
-  # A-2: форматирует details для attempts с decision: "selected" — каждая
-  # причина обязана содержать число (см. AGENTS.md, «причина без числа не
-  # принимается»). Skip-причины форматируют сами constraints (details уже
-  # часть Routing::Violation), сюда не входят.
+  # Форматирует details для attempts с decision: "selected" — причина без числа
+  # ничего не объясняет, поэтому в каждой есть конкретное сравнение.
+  # Skip-причины форматируют сами constraints (details уже часть
+  # Routing::Violation), сюда не входят.
   #
   # best_target_adherence сюда пока не входит: её числа — отклонение доли по
-  # стратегии — появляются только вместе со стратегиями в Ф2/Ф3.
+  # стратегии — появляются только вместе со стратегиями выбора.
   module DetailsFormatter
     def self.only_eligible_provider(total_count)
       "1 допустимый провайдер из #{total_count}"

@@ -9,7 +9,7 @@ module Execution
     # имеет заранее заданный исход. Промах ключа — KeyError, а не «по умолчанию
     # отказ»: тихий дефолт скроет ошибку в сценарии.
     #
-    # Формат YAML (docs/ARCHITECTURE.md §7):
+    # Формат YAML:
     #   op_101:
     #     vipay: :approved
     #     payflow: :rejected

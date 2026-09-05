@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 module Reporting
-  # A-3/A-8: конкретный параметр и значение, а не наблюдение (ARCHITECTURE.md
-  # §12) -- расхождение паспортной conversion_24h с историей и приближение
-  # к дневному лимиту.
+  # Конкретный параметр и значение, а не наблюдение -- расхождение паспортной
+  # conversion_24h с историей и приближение к дневному лимиту.
   module Recommendations
     CONVERSION_GAP_THRESHOLD = 0.05
     MAX_SLOTS_LEFT = 3

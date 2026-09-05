@@ -63,8 +63,8 @@ RSpec.describe Routing::Constraints::RateLimit do
     expect(described_class.minute_key(operation)).to eq('2026-07-30T09:05')
   end
 
-  # П2 (docs/plans/P6/P2_rate_limit.md): RateLimit больше не в
-  # Routing::Constraints::REGISTRY -- этот тест защищает Routing::Achievable
+  # RateLimit больше не в Routing::Constraints::REGISTRY -- этот тест защищает
+  # Routing::Achievable
   # и ReportBuilder.eligibility_for, которые вызывают Constraints.eligible? без
   # состояния и не должны заметить появление requests_per_minute_limit в
   # снапшоте.
@@ -78,7 +78,7 @@ RSpec.describe Routing::Constraints::RateLimit do
       expect(Routing::Constraints.check(provider, build_operation, nil)).to be_nil
     end
 
-    it 'eligible? без state даёт тот же ответ, что и до пакета П2 (RateLimit не в REGISTRY)' do
+    it 'eligible? без state даёт тот же ответ, как если бы RateLimit не было в REGISTRY' do
       provider = build_provider(requests_per_minute_limit: 7)
 
       expect(Routing::Constraints::REGISTRY).not_to include(described_class)

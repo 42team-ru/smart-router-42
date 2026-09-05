@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Reporting
-  # A-4: три раздельных распределения (ARCHITECTURE.md §12).
+  # Три раздельных распределения.
   #   by_final(..., :count)  -- итоговый selected_provider, доля заявок
   #   by_final(..., :amount) -- итоговый selected_provider, доля объёма
   #   by_attempt              -- все реальные попытки исполнения (decision
@@ -22,8 +22,8 @@ module Reporting
       providers.to_h { |provider| [provider.name, attempt_entry(grouped.fetch(provider.name, []))] }
     end
 
-    # A-3/A-5: тальи причин эл. отсева (decision == 'skipped') -- дополняет
-    # by_attempt, который считает только реальные попытки исполнения.
+    # Тальи причин эл. отсева (decision == 'skipped') -- дополняет by_attempt,
+    # который считает только реальные попытки исполнения.
     def self.skip_reasons(outcomes)
       outcomes.flat_map(&:attempts)
               .select { |attempt| attempt.decision == 'skipped' }
@@ -51,8 +51,8 @@ module Reporting
     end
     private_class_method :targets
 
-    # C-2 (docs/plans/PHASE_3_VOVA.md): volume_share_pct отсутствует в снапшоте
-    # организаторов, поэтому цель по объёму берётся из traffic_percentage -- тем
+    # volume_share_pct отсутствует в снапшоте организаторов, поэтому цель по
+    # объёму берётся из traffic_percentage -- тем
     # же фоллбэком, что и Routing::Strategies::VolumeShare. Без него target_pct
     # равен нулю, а deviation_pp вырождается в саму долю: quickpay показывал
     # 64 п.п. отклонения там, где цели просто нет.
@@ -63,12 +63,12 @@ module Reporting
     end
     private_class_method :target_of
 
-    # ARCHITECTURE.md:370 -- отклонение меряется ОТ ДОСТИЖИМОЙ доли, а не от
-    # паспортной. На десяти заявках доля квантуется шагом 10 п.п., в 35% попасть
-    # нельзя в принципе, и разница цель/достижимое -- арифметический пол, а не
-    # промах движка. Там, где достижимого нет (объём, spacepayments), меряем от
-    # цели: другой опоры просто нет.
-    # R-12: достижимую долю считает Routing::Achievable, и считает он места в
+    # Отклонение меряется ОТ ДОСТИЖИМОЙ доли, а не от паспортной. На десяти
+    # заявках доля квантуется шагом 10 п.п., в 35% попасть нельзя в принципе, и
+    # разница цель/достижимое -- арифметический пол, а не промах движка. Там,
+    # где достижимого нет (объём, spacepayments), меряем от цели: другой опоры
+    # просто нет.
+    # Достижимую долю считает Routing::Achievable, и считает он места в
     # очереди, а не деньги. Поэтому в volume_distribution поля нет -- null
     # честнее копии цели. У spacepayments его тоже нет: fallback исключён из
     # расчёта по допуску, а не по исходу.

@@ -4,13 +4,12 @@ require 'routing/layers/budget_headroom'
 require 'routing/layer_stack'
 require 'routing/strategies/priority'
 
-# T-4: «ψ сохраняет headroom payflow» (docs/TASKS.md). Буквальная формулировка
-# T-4 ("прогон без ψ ловушку воспроизводит, с ψ — нет, op_107 не уходит в
-# spacepayments") сегодня не воспроизводится вообще: Constraints::DailyLimit
-# уже читает живое состояние (см. комментарий в spec/support/psi_trap_scenario.rb),
-# поэтому индивидуально одобренная операция никогда не пробивает лимит
-# провайдера суммарно — ни с ψ, ни без него. T-4 поэтому проверяется в двух
-# частях:
+# «ψ сохраняет headroom payflow». Буквальная формулировка ("прогон без ψ
+# ловушку воспроизводит, с ψ — нет, op_107 не уходит в spacepayments")
+# сегодня не воспроизводится вообще: Constraints::DailyLimit уже читает живое
+# состояние (см. комментарий в spec/support/psi_trap_scenario.rb), поэтому
+# индивидуально одобренная операция никогда не пробивает лимит провайдера
+# суммарно — ни с ψ, ни без него. Поэтому проверяется в двух частях:
 #
 #   1. Реальные данные, config/examples/adwords.yml — payflow остаётся за
 #      op_107, для op_101/102/110 либо отсутствует, либо последний по
@@ -28,7 +27,7 @@ require 'routing/strategies/priority'
 # payflow: лимит 100 000 ₽, 90 000 ₽ уже одобрено (T = 0.90 на старте). Две
 # операции по 6 000 ₽ — после первой T = 0.96, вторая (96 000 + 6 000 =
 # 102 000 > 100 000) пробила бы лимит и потому хард-отклоняется.
-RSpec.describe 'сценарий-ловушка бюджета (T-4)' do
+RSpec.describe 'сценарий-ловушка бюджета' do
   describe 'без ψ — payflow отдаётся до упора, лимит останавливает его в последний момент' do
     it 'op_a уходит в payflow, op_b — в vipay после хард-отказа payflow' do
       result = PsiTrapScenario.run(strategy: Routing::Strategies::Priority.new)

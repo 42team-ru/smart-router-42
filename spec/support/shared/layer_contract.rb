@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Аналог 'контракт стратегии' (strategy_contract.rb) для слоёв Ф4 (X-1/X-2/X-3).
+# Аналог 'контракт стратегии' (strategy_contract.rb) для слоёв.
 # Спек-контекст должен определить subject (экземпляр слоя), ranked (уже
 # допущенные и отранжированные кандидаты — то, что слой реально видит в
 # Planner#plan), operation и state (Routing::ShareLedger).

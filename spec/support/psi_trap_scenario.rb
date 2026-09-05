@@ -7,8 +7,8 @@ require 'state/providers'
 require 'execution/executor'
 require 'execution/outcome_source/always_ok'
 
-# Билдер сценария-ловушки бюджета для T-4 / X-2 (ψ, идея 3 из
-# docs/RESEARCH.md). Безотносителен к конкретному слою: принимает произвольный
+# Билдер сценария-ловушки бюджета для слоя ψ.
+# Безотносителен к конкретному слою: принимает произвольный
 # Routing::LayerStack (по умолчанию пустой), сам не знает о ψ — только строит
 # providers/operations и прогоняет их через реальный
 # Planner+Executor+State::Providers — ровно как build_pipeline в bin/route
@@ -16,15 +16,15 @@ require 'execution/outcome_source/always_ok'
 # ShareLedger — иначе слой, читающий live daily_approved_amount, не увидел бы
 # рост бюджета между op_a и op_b и молча откатился на замороженный снапшот).
 #
-# ВАЖНО, уточнено проверкой запуском кода (не только чтением плана Ф4):
+# ВАЖНО, уточнено проверкой запуском кода (не только чтением плана):
 # `Constraints::DailyLimit.approved_amount` уже читает живое
 # `state.daily_approved_amount(name)`, когда `state` его поддерживает
 # (lib/routing/constraints/daily_limit.rb) — то есть "архитектурный факт",
-# описанный в docs/plans/PHASE_4_VOVA.md §0.2/C-4 ("хард-констрейнт не видит
-# рост бюджета за прогон"), на момент написания того раздела плана был верен,
-# но уже устранён в коде (см. commit 8ce1d96, раньше слоя budget_headroom).
-# Буквальная "ловушка" из TASKS.md — операция, индивидуально одобренная, но
-# суммарно пробивающая лимит провайдера, — поэтому сегодня НЕ воспроизводится
+# что "хард-констрейнт не видит рост бюджета за прогон", был верен на момент
+# планирования, но уже устранён в коде (см. commit 8ce1d96, раньше слоя
+# budget_headroom).
+# Буквальная "ловушка" — операция, индивидуально одобренная, но суммарно
+# пробивающая лимит провайдера, — поэтому сегодня НЕ воспроизводится
 # вообще, ни с ψ, ни без: DailyLimit сам ловит вторую операцию (op_b) и не
 # даёт payflow превысить лимит (см. `bin/route:208`, `pipeline[:state]`
 # передаётся в `plan`, а не в `pipeline[:ledger]`; здесь то же самое).
@@ -85,7 +85,7 @@ module PsiTrapScenario
   # Прогоняет обе операции подряд по одному State::Providers.
   # strategy — любой Routing::Strategies::Base. layers — Routing::LayerStack,
   # по умолчанию пустой ("прогон без ψ"); передайте стопку с budget_headroom,
-  # чтобы получить "прогон с ψ" (T-4).
+  # чтобы получить "прогон с ψ".
   def run(strategy:, layers: Routing::LayerStack.new([]))
     snapshot = providers
     pipeline = build_pipeline(snapshot, strategy, layers)

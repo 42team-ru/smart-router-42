@@ -2,7 +2,7 @@
 
 require 'routing/strategies'
 
-# CFG-3: «новая стратегия = файл + строка в конфиге, без правок ядра».
+# «Новая стратегия = файл + строка в конфиге, без правок ядра».
 # Реестр обязан совпадать с каталогом: файл без register и файл-мусор,
 # оставшийся после демо, ломают равенство, а не проходят молча.
 RSpec.describe Routing::Strategies do
@@ -27,7 +27,7 @@ RSpec.describe Routing::Strategies do
     expect(described_class.load_all!).to eq(before)
   end
 
-  it 'реестр содержит все семь стратегий Ф3 плюс round_robin из П3' do
+  it 'реестр содержит все семь стратегий плюс round_robin' do
     described_class.load_all!
 
     expect(described_class.known).to eq(

@@ -76,9 +76,9 @@ RSpec.describe 'bin/route' do
 
   # spec/contracts/fixtures_spec.rb проверяет форму "recommendations — массив
   # строк" только на статической фикстуре (spec/fixtures/contracts/report.json),
-  # не на реальном выводе bin/route -- эту дыру A-7/X-6 впервые делают
-  # значимой (deviation_causes и retarget получают вычисляемое содержимое, а
-  # не пустышку/константу), и здесь она закрывается на живом прогоне.
+  # не на реальном выводе bin/route -- эту дыру впервые делают значимой
+  # (deviation_causes и retarget получают вычисляемое содержимое, а не
+  # пустышку/константу), и здесь она закрывается на живом прогоне.
   it 'deviation_causes и recommendations — массивы строк с числом на реальном прогоне' do
     Dir.mktmpdir do |tmp|
       run_route(queue_path, '--out-dir', tmp)
@@ -92,7 +92,7 @@ RSpec.describe 'bin/route' do
     end
   end
 
-  # D-1: не переспецифицирует построчный формат (это спек
+  # Не переспецифицирует построчный формат (это спек
   # spec/reporting/console_summary_spec.rb) -- только ловит факт стыковки
   # Reporting::ConsoleSummary в bin/route.
   it 'печатает в STDOUT решение по каждой операции и итоговую сводку' do
@@ -158,14 +158,14 @@ RSpec.describe 'bin/route' do
     end
   end
 
-  # CFG-2 (W3): конфиг доезжает до пайплайна. Боевой config/routing.yml спеки
-  # только читают — правки уходят во временный файл в Dir.mktmpdir.
+  # Конфиг доезжает до пайплайна. Боевой config/routing.yml спеки только
+  # читают — правки уходят во временный файл в Dir.mktmpdir.
   describe 'конфигурация' do
     let(:production_config) { File.expand_path('../../config/routing.yml', __dir__) }
 
-    # П4 (docs/plans/P6/P4_сравнение.md): comparison требует, чтобы один из
-    # вариантов буквально совпадал с боевыми strategy/layers (иначе SchemaError
-    # -- "таблица без опоры на фактический прогон бессмысленна"). Тесты этого
+    # comparison требует, чтобы один из вариантов буквально совпадал с боевыми
+    # strategy/layers (иначе SchemaError -- "таблица без опоры на фактический
+    # прогон бессмысленна"). Тесты этого
     # хелпера меняют strategy/layers ради ДРУГИХ проверок и не обязаны держать
     # comparison согласованным с новым значением, поэтому секция обрезается.
     def strip_comparison(source)
@@ -299,10 +299,9 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    # П1+П2 (docs/plans/P6/P1_снапшот_и_override.md, P2_rate_limit.md):
-    # дефолтный снапшот — data/providers.json, где daily_turnover_min/max
-    # (П1) и requests_per_minute_limit (П2) уже реальные поля, поэтому ни
-    # предупреждение про obligations, ни про rate_limits больше не печатается.
+    # Дефолтный снапшот — data/providers.json, где daily_turnover_min/max и
+    # requests_per_minute_limit уже реальные поля, поэтому ни предупреждение
+    # про obligations, ни про rate_limits больше не печатается.
     it 'на дефолтном снапшоте не предупреждает ни про rate_limits, ни про obligations' do
       Dir.mktmpdir do |tmp|
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
@@ -326,13 +325,13 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    # П7 (docs/plans/P6/P7_настраиваемый_fallback.md): режимы каскада доезжают
-    # из конфига в Execution::Executor. Проверяем по наблюдаемому поведению
+    # Режимы каскада доезжают из конфига в Execution::Executor. Проверяем по
+    # наблюдаемому поведению
     # процесса на подготовленных queue+config, а не заглядывая во внутренности
     # bin/route. calibrate_from_history: false фиксирует источник конверсий
     # на conversion_24h из data/providers.json -- иначе исход зависел бы от
     # истории и результат нельзя было бы предсказать заранее.
-    describe 'П7: cascade' do
+    describe 'cascade' do
       def write_queue(dir, operations)
         path = File.join(dir, 'queue.json')
         File.write(path, JSON.generate(operations))
@@ -456,10 +455,10 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    # П4 (docs/plans/P6/P4_сравнение.md): comparison строится один раз в
-    # bin/route и идёт только в консоль/report -- decisions.json не задевает
-    # (spec/offline/isolation_spec.rb стережёт то же самое на уровне lib/).
-    describe 'П4: comparison' do
+    # comparison строится один раз в bin/route и идёт только в консоль/report
+    # -- decisions.json не задевает (spec/offline/isolation_spec.rb стережёт
+    # то же самое на уровне lib/).
+    describe 'comparison' do
       def comparison_yaml_block
         <<~YAML
           comparison:
@@ -511,7 +510,7 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    it 'дефолтный прогон побайтово не меняется после П7 (regression)' do
+    it 'дефолтный прогон побайтово не меняется (regression)' do
       Dir.mktmpdir do |tmp|
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
         produced = File.binread(File.join(tmp, 'routing_decisions_test.json'))

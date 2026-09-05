@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Демо CFG-3 на минуту защиты: новая стратегия = файл в lib/routing/strategies/
+# Демо на минуту защиты: новая стратегия = файл в lib/routing/strategies/
 # плюс строка strategy: в конфиге. Ядро не правится: ни bin/route, ни реестр,
 # ни Planner о новом имени не знают.
 #
@@ -46,7 +46,10 @@ known
 echo
 echo '== 3. Одна строка в конфиге: strategy: count_share -> strategy: reverse_priority =='
 # Боевой config/routing.yml не изменяется: правится копия во временном каталоге.
-sed 's/^strategy: count_share$/strategy: reverse_priority/' config/routing.yml >"$TMP/routing.yml"
+# Ключ comparison требует, чтобы один из вариантов совпадал с боевой стратегией,
+# а демо её как раз подменяет — вырезаем блок, он к демонстрации не относится.
+sed 's/^strategy: count_share$/strategy: reverse_priority/' config/routing.yml \
+  | sed '/^comparison:/,/^[^ -]/{/^comparison:/d; /^[[:space:]]*-/d;}' >"$TMP/routing.yml"
 grep -E '^strategy:' "$TMP/routing.yml"
 bundle exec bin/route "$QUEUE" --config "$TMP/routing.yml" --out-dir "$TMP" >/dev/null
 echo -n 'распределение reverse_priority: '
@@ -85,4 +88,4 @@ if [ -n "$leftovers" ]; then
 fi
 
 echo
-echo 'демо CFG-3: OK'
+echo 'демо: OK'

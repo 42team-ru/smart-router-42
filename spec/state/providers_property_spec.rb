@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# T-7. Property-based тесты инвариантов State::Providers.
+# Property-based тесты инвариантов State::Providers.
 #
-# Инварианты из §15 ARCH:
+# Инварианты из ARCHITECTURE.md:
 #   * in_progress_count и in_progress_amount возвращаются к исходному
 #     после commit или rollback (expired держит, тест явно не проверяет).
 #

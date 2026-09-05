@@ -6,9 +6,9 @@ require_relative 'schema_validator'
 require_relative 'routing_config'
 
 module Config
-  # CFG-1: config/routing.yml + загрузчик, валидация схемы.
+  # config/routing.yml + загрузчик, валидация схемы.
   #
-  # Не подключается в bin/route/Planner — это CFG-2 (Вова). Loader только
+  # Не подключается в bin/route/Planner — это Routing::Assembly. Loader только
   # парсит YAML, проверяет форму (SchemaValidator) и отдаёт иммутабельный
   # Config::RoutingConfig. Останавливается на первом найденном нарушении —
   # один SchemaError на вызов, как остальные загрузчики в lib/io/.

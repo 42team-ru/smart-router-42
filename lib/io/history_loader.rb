@@ -3,12 +3,12 @@
 require 'csv'
 
 module Io
-  # IO-3: загрузчик operations_history.csv, калибровка конверсий.
+  # Загрузчик operations_history.csv: считает наблюдаемую конверсию провайдеров.
   #
   # Паспортный conversion_24h из providers.json заявлен продавцом и не
-  # совпадает с фактом (см. docs/ARCHITECTURE.md §12). Калибровка — это
-  # approved / всего записей за провайдером на всей истории, без деления
-  # на approved+rejected: expired тоже расход возможности провайдера.
+  # совпадает с фактом. Калибровка — это approved / всего записей за
+  # провайдером на всей истории, без деления на approved+rejected: expired
+  # тоже расход возможности провайдера.
   module HistoryLoader
     def self.load(path)
       totals = Hash.new(0)

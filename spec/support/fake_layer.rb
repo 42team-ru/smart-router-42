@@ -5,7 +5,7 @@ require 'routing/layers/base'
 # Тестовые двойники для контракта слоя (spec/support/shared/layer_contract.rb)
 # и property-теста (spec/routing/layers/contract_property_spec.rb). Никогда не
 # регистрируются в Routing::Layers — существуют только для проверки того, что
-# сам контракт реально ловит нарушение, до появления настоящих слоёв (X-1/X-2/X-3).
+# сам контракт реально ловит нарушение, до появления настоящих слоёв.
 # В lib/ не переезжают никогда.
 class FakeLayer < Routing::Layers::Base
   def name = 'fake_layer'

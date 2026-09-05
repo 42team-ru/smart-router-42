@@ -10,7 +10,7 @@ RSpec.describe Routing::DetailsFormatter do
   end
 
   describe '.fallback_no_eligible_provider' do
-    it 'совпадает с Ф0-заглушкой bin/route: "допустимых внешних провайдеров 0 из 3"' do
+    it 'совпадает с форматом bin/route: "допустимых внешних провайдеров 0 из 3"' do
       expect(described_class.fallback_no_eligible_provider(3))
         .to eq('допустимых внешних провайдеров 0 из 3')
     end

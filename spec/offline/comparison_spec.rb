@@ -10,10 +10,9 @@ require 'offline/comparison'
 require 'routing/layers'
 require 'routing/strategies'
 
-# П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение конфигураций.
-# Спек намеренно работает на РЕАЛЬНОМ боевом конфиге/снапшоте/очереди -- иначе
-# "совпадение с фактом" (п.3 "Готово когда" брифа) осталось бы утверждением
-# без проверки. routing_report_test.json/routing_decisions_test.json в корне
+# Офлайн-сравнение конфигураций. Спек намеренно работает на РЕАЛЬНОМ боевом
+# конфиге/снапшоте/очереди -- иначе "совпадение с фактом" осталось бы
+# утверждением без проверки. routing_report_test.json/routing_decisions_test.json в корне
 # репозитория -- уже посчитанный факт (make deliver), decisions на публичной
 # очереди этот пакет не меняет (spec/bin/route_spec.rb это стережёт отдельно).
 # rubocop:disable RSpec/MultipleMemoizedHelpers -- реальный конфиг тянет реальные

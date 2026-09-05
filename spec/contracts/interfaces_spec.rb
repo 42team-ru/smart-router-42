@@ -177,11 +177,11 @@ RSpec.describe 'семь замороженных интерфейсов' do
     end
   end
 
-  # П7 (docs/plans/P6/P7_настраиваемый_fallback.md): SELECTED пополнился ровно
-  # одной причиной (fallback_after_cascade), SKIP не изменился -- список отсева
-  # остаётся дословным по эталону организаторов (проверяется выше).
+  # SELECTED пополнился ровно одной причиной (fallback_after_cascade), SKIP не
+  # изменился -- список отсева остаётся дословным по эталону организаторов
+  # (проверяется выше).
   describe 'Routing::Reasons::SELECTED' do
-    it 'содержит ровно 6 причин выбора после П7' do
+    it 'содержит ровно 6 причин выбора' do
       expect(Routing::Reasons::SELECTED.size).to eq(6)
     end
 
@@ -189,7 +189,7 @@ RSpec.describe 'семь замороженных интерфейсов' do
       expect(Routing::Reasons::SELECTED.frozen?).to be(true)
     end
 
-    it 'включает fallback_after_cascade (буквальное прочтение ТЗ, П7)' do
+    it 'включает fallback_after_cascade (буквальное прочтение ТЗ)' do
       expect(Routing::Reasons::SELECTED).to include('fallback_after_cascade')
     end
 

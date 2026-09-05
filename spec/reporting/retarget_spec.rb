@@ -8,9 +8,9 @@ require 'routing/constraints'
 require 'offline/objective'
 require 'domain/provider'
 
-# X-6 на настоящей публичной очереди (reference/data) -- те же входные данные,
-# что и у A-7 (spec/reporting/deviation_causes_spec.rb), потому что обе задачи
-# используют один и тот же Routing::Achievable.for_queue.
+# Retarget на настоящей публичной очереди (reference/data) -- те же входные
+# данные, что и у spec/reporting/deviation_causes_spec.rb, потому что обе
+# проверки используют один и тот же Routing::Achievable.for_queue.
 RSpec.describe Reporting::Retarget do
   # rubocop:disable-next RSpec/MultipleMemoizedHelpers -- providers/operations/eligibility/achievable/metrics образуют один сценарий.
   describe 'на реальной публичной очереди (reference/data)' do

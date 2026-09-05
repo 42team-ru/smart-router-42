@@ -5,7 +5,7 @@ require 'routing/layers/budget_headroom'
 require 'state/providers'
 require_relative '../../support/provider_factory'
 
-# rubocop:disable-next RSpec/MultipleExpectations, RSpec/ExampleLength -- числа X-2 образуют один контракт.
+# rubocop:disable-next RSpec/MultipleExpectations, RSpec/ExampleLength -- числа приёмки образуют один контракт.
 RSpec.describe Routing::Layers::BudgetHeadroom do
   include ProviderFactory
 
@@ -13,7 +13,7 @@ RSpec.describe Routing::Layers::BudgetHeadroom do
   let(:by_name) { providers.to_h { |provider| [provider.name, provider] } }
   let(:layer) { described_class.new }
 
-  it 'считает числа приёмки X-2 и форматирует их без float' do
+  it 'считает числа приёмки и форматирует их без float' do
     results = %w[quickpay vipay payflow].to_h do |name|
       psi = layer.psi_micro(by_name.fetch(name), nil)
       [name, [psi, layer.send(:format_micro, psi)]]

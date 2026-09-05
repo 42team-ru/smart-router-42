@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Reporting
-  # D-1: читаемый вывод bin/route в терминал. Ничего не считает заново —
+  # Читаемый вывод bin/route в терминал. Ничего не считает заново —
   # только форматирует то, что уже посчитано пайплайном (pairs) и
   # Reporting::ReportBuilder (report). "Выигравшая" попытка — последняя с
   # decision == 'selected': неудачные реальные попытки каскада тоже
@@ -39,8 +39,8 @@ module Reporting
       ]
     end
 
-    # П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение вариантов
-    # (strategy+layers), только для чтения глазами -- в принятие решений не
+    # Офлайн-сравнение вариантов (strategy+layers), только для чтения глазами
+    # -- в принятие решений не
     # входит. Ключа `comparison` в отчёте нет, если конфиг его не задавал
     # (Reporting::ReportBuilder.build без kwarg-а comparison).
     def self.comparison_lines(report)

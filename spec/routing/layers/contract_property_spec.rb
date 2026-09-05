@@ -4,9 +4,9 @@ require 'routing/layers'
 require 'routing/layer_stack'
 require 'routing/share_ledger'
 
-# T-5. «Случайные конфигурации» здесь — это случайные допущенные наборы
+# «Случайные конфигурации» здесь — это случайные допущенные наборы
 # кандидатов, а не порядок самих слоёв в конфиге (тот покрыт тестами
-# Assembly/CFG). Сид фиксирован ради воспроизводимости диагностики при
+# Routing::Assembly). Сид фиксирован ради воспроизводимости диагностики при
 # падении; на файлы в spec/ запрет rand/shuffle/sample из
 # scripts/check_determinism.sh не распространяется — он ограничен lib/routing
 # и lib/execution.

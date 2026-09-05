@@ -5,7 +5,7 @@ require_relative '../routing/strategies'
 require_relative '../routing/layers'
 
 module Config
-  # CFG-1: валидация полей-коллекций конфига (layers, amount_ranges, obligations,
+  # Валидация полей-коллекций конфига (layers, amount_ranges, obligations,
   # rate_limits, cascade, comparison). Вынесено из SchemaValidator отдельным
   # модулем, чтобы оба файла оставались небольшими и проверяемыми по отдельности.
   # rubocop:disable-next Metrics/ModuleLength -- набор мелких проверок одной формы
@@ -14,8 +14,8 @@ module Config
   module SchemaRules
     OBLIGATION_KEYS = %w[daily_turnover_min daily_turnover_max].freeze
 
-    # П7 (docs/plans/P6/P7_настраиваемый_fallback.md): переключатель поведения
-    # каскада. Отсутствующий ключ `cascade` целиком и отсутствующие подключи —
+    # Переключатель поведения каскада. Отсутствующий ключ `cascade` целиком и
+    # отсутствующие подключи —
     # законный вход, дефолты подставляются на стороне сборки (bin/route), не
     # здесь -- здесь только форма и допустимые значения.
     CASCADE_KEYS = %w[exhausted on_timeout].freeze
@@ -209,8 +209,8 @@ module Config
                          "#{outcome.inspect}; допустимы #{SCRIPT_OUTCOMES.join(', ')}"
     end
 
-    # П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение конфигураций.
-    # Отсутствующий или пустой ключ `comparison` — законный вход, секции в
+    # Офлайн-сравнение конфигураций. Отсутствующий или пустой ключ `comparison`
+    # — законный вход, секции в
     # отчёте нет. Реестры стратегий/слоёв грузятся здесь же (`load_all!`
     # идемпотентен -- spec/routing/strategies_registry_spec.rb), чтобы проверка
     # `Routing::Strategies.known` не зависела от порядка require в остальном
@@ -285,9 +285,8 @@ module Config
     # baseline — вариант, буквально совпадающий с боевым strategy/layers
     # (сравнение читается ДО применения override CLI --strategy: тот
     # override — не про comparison, а про боевой пайплайн). Таблица без
-    # опоры на фактический прогон бессмысленна (docs/plans/P6/P4, п. "Готово
-    # когда" №3), поэтому отсутствие совпадения — ошибка схемы, а не тихий
-    # пропуск.
+    # опоры на фактический прогон бессмысленна, поэтому отсутствие совпадения —
+    # ошибка схемы, а не тихий пропуск.
     def self.validate_comparison_baseline!(comparison, strategy, layers)
       match = comparison.any? do |entry|
         entry['strategy'] == strategy && entry.fetch('layers', []) == layers

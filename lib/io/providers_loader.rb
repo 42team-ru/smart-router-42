@@ -4,7 +4,7 @@ require 'json'
 require_relative '../domain/provider'
 
 module Io
-  # IO-1: загрузчик снимка провайдеров из providers.json.
+  # Загрузчик снимка провайдеров из providers.json.
   #
   # null в любом лимите остаётся nil — Domain::Provider трактует это как
   # «ограничения нет». spacepayments грузится тем же кодом, что и остальные:

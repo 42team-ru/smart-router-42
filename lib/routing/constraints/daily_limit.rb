@@ -23,10 +23,6 @@ module Routing
     # остаётся 100 000 ₽ при четырёх доступных ему заявках на 103 800 ₽, и
     # порядок выдачи решает, достанется ли ему та единственная, которую больше
     # взять некому.
-    #
-    # Дальше по коду: State::Providers#daily_approved_amount — как счётчик
-    # растёт по ходу очереди; Routing::Layers::BudgetHeadroom — как остаток
-    # лимита влияет на порядок, а не только на допуск.
     class DailyLimit < Base
       REASON = 'daily_limit_exceeded'
 

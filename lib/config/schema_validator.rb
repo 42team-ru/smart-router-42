@@ -4,12 +4,12 @@ require_relative 'errors'
 require_relative 'schema_rules'
 
 module Config
-  # CFG-1: структурная валидация распарсенного YAML конфига (ключи, типы).
+  # Структурная валидация распарсенного YAML конфига (ключи, типы).
   # Не проверяет, что имена стратегий/слоёв существуют как зарегистрированные
   # классы — это уже умеет Routing::Strategies.build, а реестра слоёв пока нет.
   module SchemaValidator
-    # Новый top-level ключ конфига (например `selector` в Ф4, docs/TASKS.md X-3) —
-    # добавить сюда одной строкой. Без этого валидатор отвергнет его как опечатку.
+    # Новый top-level ключ конфига — добавить сюда одной строкой. Без этого
+    # валидатор отвергнет его как опечатку.
     KNOWN_TOP_LEVEL_KEYS = %w[
       strategy layers goals strategy_selection outcomes
       amount_ranges obligations rate_limits fallback_provider cascade comparison

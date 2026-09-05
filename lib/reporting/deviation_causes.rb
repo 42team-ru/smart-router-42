@@ -3,7 +3,7 @@
 require_relative '../offline/objective'
 
 module Reporting
-  # A-7: числовая причина каждого отклонения факта от паспортной цели.
+  # Числовая причина каждого отклонения факта от паспортной цели.
   #
   # Отклонение раскладывается на структурную часть (bound из
   # Routing::Achievable.for_queue — допуск/дневной лимит) и остаток, который
@@ -14,10 +14,9 @@ module Reporting
   # наперёд — поэтому причина выбирается по bound, а не по знаку отклонения.
   #
   # Порог >= 5.0, а не > 5.0: на эталонной очереди максимальное отклонение
-  # равно ровно 5.0 (quickpay +5.0 / payflow −5.0 — тот самый пример приёмки
-  # из docs/TASKS.md и spec/fixtures/contracts/report.json). При строгом ">"
-  # deviation_causes оставался бы пустым на данных, на которых демонстрируется
-  # система.
+  # равно ровно 5.0 (quickpay +5.0 / payflow −5.0 — см. spec/fixtures/contracts/report.json).
+  # При строгом ">" deviation_causes оставался бы пустым на данных, на которых
+  # демонстрируется система.
   module DeviationCauses
     THRESHOLD_PP = 5.0
 

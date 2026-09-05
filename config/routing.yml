@@ -1,18 +1,17 @@
-# Конфигурация роутинга. Схема и валидация — Config::Loader (lib/config/loader.rb, CFG-1).
+# Конфигурация роутинга. Схема и валидация — Config::Loader (lib/config/loader.rb).
 #
 # Файл читает bin/route на старте, один раз, и передаёт объектом в
-# Routing::Assembly (CFG-2). Смена ключа strategy здесь меняет распределение без
+# Routing::Assembly. Смена ключа strategy здесь меняет распределение без
 # правок кода. Флаг --strategy перекрывает ключ strategy; путь к самому файлу
 # меняется флагом --config.
 #
 # Влияют сегодня: strategy, strategy_selection, outcomes, amount_ranges (при
 # strategy: amount_range), fallback_provider, включённые слои, obligations
-# (daily_turnover_min/max, П1), rate_limits (requests_per_minute_limit, П2 --
-# docs/plans/P6/P2_rate_limit.md) и cascade (исчерпание каскада и таймаут,
-# П7 -- docs/plans/P6/P7_настраиваемый_fallback.md). Оба override накладываются
-# поверх data/providers.json, где эти поля уже реальны; CLI предупреждает
-# только на снапшотах, где поля действительно отсутствуют (например,
-# пристинном reference/data/providers.json).
+# (daily_turnover_min/max), rate_limits (requests_per_minute_limit) и cascade
+# (исчерпание каскада и таймаут). Оба override накладываются поверх
+# data/providers.json, где эти поля уже реальны; CLI предупреждает только на
+# снапшотах, где поля действительно отсутствуют (например, пристинном
+# reference/data/providers.json).
 
 # Источник наблюдаемых конверсий: приведённая история операций. Отсюда берутся
 # пороги симуляции исходов, порядок в стратегии conversion и расхождение
@@ -47,21 +46,20 @@ rate_limits:
   payflow: 10
   quickpay: 15
 
-# П7: обе трактовки ТЗ доступны переключателем, дефолты — сегодняшнее
-# поведение (записаны явно, а не подразумеваются молчаливым отсутствием ключа).
+# Обе трактовки ТЗ доступны переключателем, дефолты — сегодняшнее поведение
+# (записаны явно, а не подразумеваются молчаливым отсутствием ключа).
 #   exhausted: last_candidate (дефолт) | fallback_provider
 #   on_timeout: stop (дефолт) | continue
 # Альтернативные значения ломают детерминированные кейсы валидатора на
-# публичной очереди (см. таблицу «Замеры» в docs/plans/P6/P7_настраиваемый_fallback.md)
-# — в боевом прогоне не менять.
+# публичной очереди — в боевом прогоне не менять.
 cascade:
   exhausted: last_candidate
   on_timeout: stop
 
 fallback_provider: spacepayments
 
-# П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение baseline (round_robin)
-# против боевой стратегии (count_share) и против count_share+слои. Постфактум
+# Офлайн-сравнение baseline (round_robin) против боевой стратегии
+# (count_share) и против count_share+слои. Постфактум
 # -- идёт только в консоль и в routing_report_test.json (секция comparison),
 # никогда в принятие решений (spec/offline/isolation_spec.rb, spec/offline/comparison_spec.rb).
 # Ровно один вариант обязан буквально совпадать с боевыми strategy/layers выше

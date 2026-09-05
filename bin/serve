@@ -2,7 +2,7 @@
 # frozen_string_literal: true
 
 # HTTP-сервис поверх CLI-ядра. Puma workers=1, threads=1 — атомарность
-# бесплатно, детерминизм гарантирован конструкцией (см. docs/plans/HTTP_SERVICE.md).
+# бесплатно, детерминизм гарантирован конструкцией.
 #
 # Использование:
 #   bin/serve                       # порт из config/service.yml

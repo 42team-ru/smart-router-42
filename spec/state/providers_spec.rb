@@ -38,7 +38,7 @@ RSpec.describe State::Providers do
     end
   end
 
-  describe 'таблица исходов §4 ARCH' do
+  describe 'таблица исходов' do
     it 'approved: in_progress освобождается, daily_approved += amount' do
       state.reserve(vipay, operation)
       state.commit(vipay, operation)
@@ -91,8 +91,8 @@ RSpec.describe State::Providers do
     end
   end
 
-  # П2 (docs/plans/P6/P2_rate_limit.md): счётчик интенсивности. Растёт только
-  # в #reserve (включая fallback-резерв — это тоже #reserve), и намеренно не
+  # Счётчик интенсивности. Растёт только в #reserve (включая fallback-резерв —
+  # это тоже #reserve), и намеренно не
   # уменьшается ни в #rollback, ни в #hold, ни в #commit, ни в #resolve_hold --
   # интенсивность считает отправленные запросы, а не занятую ёмкость.
   describe '#requests_in_minute' do

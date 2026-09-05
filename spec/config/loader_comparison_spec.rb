@@ -5,8 +5,8 @@ require 'config/loader'
 require 'routing/layers'
 require 'routing/strategies'
 
-# П4 (docs/plans/P6/P4_сравнение.md): валидация ключа `comparison`.
-# Реестры стратегий/слоёв должны быть загружены явно -- Config::SchemaRules
+# Валидация ключа `comparison`. Реестры стратегий/слоёв должны быть
+# загружены явно -- Config::SchemaRules
 # грузит их сама (idempotent load_all!), но здесь дублируем перед блоком по
 # тому же принципу, что spec/routing/assembly_spec.rb/selector_spec.rb: порядок
 # исполнения спеков всего прогона не должен решать исход этого файла.

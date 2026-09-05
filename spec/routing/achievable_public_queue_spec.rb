@@ -7,9 +7,10 @@ require_relative '../../lib/routing/achievable'
 require_relative '../../lib/routing/constraints'
 require_relative '../../lib/reporting/report_builder'
 
-# R-12 на боевых данных. Фикстуры report_builder_spec синтетические: там никто
-# никого не допускает, achievable выходит нулевым и регрессию не ловит.
-# Здесь -- публичная очередь организаторов и таблица из ARCHITECTURE.md:379.
+# Routing::Achievable на боевых данных. Фикстуры report_builder_spec
+# синтетические: там никто никого не допускает, achievable выходит нулевым
+# и регрессию не ловит. Здесь -- публичная очередь организаторов и таблица
+# из ARCHITECTURE.md.
 RSpec.describe Routing::Achievable do
   let(:providers) { Io::ProvidersLoader.load('reference/data/providers.json') }
   let(:operations) { Io::QueueLoader.load('reference/data/operations_queue_10.json').operations }
@@ -24,8 +25,8 @@ RSpec.describe Routing::Achievable do
                               eligibility: eligibility)
   end
 
-  # ARCHITECTURE.md:379 -- vipay 40%, payflow 30% (допущены 4 заявки, но
-  # headroom хватает на 3), quickpay 30% (op_103, 104, 108 -- больше некому).
+  # vipay 40%, payflow 30% (допущены 4 заявки, но headroom хватает на 3),
+  # quickpay 30% (op_103, 104, 108 -- больше некому).
   it 'даёт 40/30/30, а не паспортные 40/35/25' do
     expect(achievable.transform_values { |entry| entry[:achievable_bp] })
       .to eq('vipay' => 4000, 'payflow' => 3000, 'quickpay' => 3000)

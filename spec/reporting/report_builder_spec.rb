@@ -177,8 +177,8 @@ RSpec.describe Reporting::ReportBuilder do
         .to equal(benchmark)
     end
 
-    # П4 (docs/plans/P6/P4_сравнение.md): comparison приходит готовым kwarg-ом,
-    # как benchmark -- build его не считает и не трогает.
+    # comparison приходит готовым kwarg-ом, как benchmark -- build его не
+    # считает и не трогает.
     it 'без kwarg-а comparison ключа `comparison` в отчёте нет вовсе' do
       expect(report).not_to have_key('comparison')
     end
@@ -195,9 +195,10 @@ RSpec.describe Reporting::ReportBuilder do
     # Синтетический снапшот фикстуры не допускает НИКОГО ни до одной из трёх
     # операций (см. комментарий у теста distribution выше) -- Achievable не
     # может приписать отклонение ни допуску (:only_option), ни дневному
-    # лимиту (:money), bound уходит в :none. A-7 в этом случае не молчит и не
-    # гадает, а помечает причину как неопределённую -- реальные структурные
-    # случаи (:only_option/:money) проверяет spec/reporting/deviation_causes_spec.rb
+    # лимиту (:money), bound уходит в :none. DeviationCauses в этом случае не
+    # молчит и не гадает, а помечает причину как неопределённую -- реальные
+    # структурные случаи (:only_option/:money) проверяет
+    # spec/reporting/deviation_causes_spec.rb
     # на настоящих данных публичной очереди.
     it 'помечает отклонение без структурной причины как требующее ручного разбора' do
       expect(report['deviation_causes']).to contain_exactly(

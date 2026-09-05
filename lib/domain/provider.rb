@@ -14,9 +14,9 @@ module Domain
   # conversion_24h, avg_latency_sec, banks, exclude_banks, provider_margin_pct,
   # merchant_margin_pct, allow_negative_agreement.
   #
-  # Поля, которых нет в снапшоте и которые заводим сами (ТЗ разрешает,
-  # см. docs/plans/PHASE_0.md, противоречие C-G): volume_share_pct,
-  # requests_per_minute_limit, daily_turnover_min, daily_turnover_max.
+  # Поля, которых нет в снапшоте и которые заводим сами (ТЗ разрешает):
+  # volume_share_pct, requests_per_minute_limit, daily_turnover_min,
+  # daily_turnover_max.
   # Ограничение, параметра которого нет, не отсеивает никого.
   Provider = Data.define(
     :payment_system, :status, :traffic_percentage, :priority,

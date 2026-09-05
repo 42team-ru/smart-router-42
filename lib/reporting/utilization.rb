@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module Reporting
-  # A-3/A-5: projected_daily_utilization -- дневная сумма из снимка провайдера
-  # (уже одобрено до этой партии) плюс сумма заявок партии, одобренных этому
+  # projected_daily_utilization -- дневная сумма из снимка провайдера (уже
+  # одобрено до этой партии) плюс сумма заявок партии, одобренных этому
   # провайдеру.
   module Utilization
     def self.projected_daily(pairs, providers)

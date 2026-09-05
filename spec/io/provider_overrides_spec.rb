@@ -3,8 +3,8 @@
 require 'io/provider_overrides'
 require_relative '../support/provider_factory'
 
-# П1 (docs/plans/P6/P1_снапшот_и_override.md): override из config/routing.yml
-# поверх снапшота. Конфиг только перекрывает явно заданное, отсутствующий
+# Override из config/routing.yml поверх снапшота. Конфиг только перекрывает
+# явно заданное, отсутствующий
 # ключ оставляет снапшотное значение — в том числе nil.
 # rubocop:disable RSpec/MultipleExpectations, RSpec/ExampleLength -- каждый пример проверяет
 # несколько связанных полей одного применения override, дробить их — терять контекст сценария

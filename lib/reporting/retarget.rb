@@ -3,10 +3,10 @@
 require_relative '../offline/objective'
 
 module Reporting
-  # X-6 (идея 6, docs/RESEARCH.md): вместо жалобы на недостижимость целей —
-  # ближайшая достижимая точка. `proposed` — уже посчитанный achievable_bp из
-  # того же Routing::Achievable.for_queue, что и A-7 (см. DeviationCauses);
-  # ничего заново не считается.
+  # Обратная задача: вместо констатации недостижимости целей — ближайшая
+  # достижимая точка. `proposed` — уже посчитанный achievable_bp из
+  # того же Routing::Achievable.for_queue, что и DeviationCauses; ничего
+  # заново не считается.
   #
   # `effect` — не пересчёт фактов, а смена целей: "если бы паспортными целями
   # были proposed, наш же результат отклонялся бы на столько". Domain::Provider

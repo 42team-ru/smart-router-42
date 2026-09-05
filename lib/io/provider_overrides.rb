@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Io
-  # П1: накладывает override из config/routing.yml (`obligations`, `rate_limits`)
+  # Накладывает override из config/routing.yml (`obligations`, `rate_limits`)
   # поверх значений снапшота провайдеров. Источник правды — снапшот, конфиг
   # только перекрывает то, что в нём явно задано; отсутствующий ключ оставляет
   # снапшотное значение как есть (в том числе nil).

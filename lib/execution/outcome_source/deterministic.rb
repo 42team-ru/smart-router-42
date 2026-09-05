@@ -10,7 +10,7 @@ module Execution
     # побайтово одинаковый вывод — источники недетерминизма в решающем пути
     # запрещены (греп в CI, см. scripts/check_determinism.sh).
     #
-    # Формула из docs/ARCHITECTURE.md §7:
+    # Формула:
     #   roll = SHA256("seed:op_id:name:attempt_no").to_i(16) % 10_000
     #   threshold = (conversions[name] * 10_000).round
     #   roll < threshold                       -> :approved
@@ -18,8 +18,8 @@ module Execution
     #   иначе                                  -> :expired
     #
     # reject_share — доля отказов среди неодобренных, в базисных пунктах.
-    # По умолчанию 500 бп (5%): согласовано в ревью Ф1, вынесено параметром,
-    # чтобы сценарные тесты каскада могли двигать соотношение rejected/expired.
+    # По умолчанию 500 бп (5%), вынесено параметром, чтобы сценарные тесты
+    # каскада могли двигать соотношение rejected/expired.
     class Deterministic < Base
       BASIS_POINTS = 10_000
 

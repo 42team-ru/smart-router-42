@@ -173,7 +173,7 @@ RSpec.describe Execution::Executor do
     it_behaves_like 'state invariants'
   end
 
-  describe 'П7: exhausted: :last_candidate (дефолт, явный kwarg) — регресс поведения' do
+  describe 'exhausted: :last_candidate (дефолт, явный kwarg) — регресс поведения' do
     let(:executor) do
       described_class.new(outcomes: Execution::OutcomeSource::AlwaysFail.new,
                           exhausted: :last_candidate)
@@ -194,7 +194,7 @@ RSpec.describe Execution::Executor do
     it_behaves_like 'state invariants'
   end
 
-  describe 'П7: exhausted: :fallback_provider — каскад исчерпан обычными отказами' do
+  describe 'exhausted: :fallback_provider — каскад исчерпан обычными отказами' do
     let(:executor) do
       described_class.new(
         outcomes: script_source(
@@ -227,7 +227,7 @@ RSpec.describe Execution::Executor do
     it_behaves_like 'state invariants'
   end
 
-  describe 'П7: on_timeout: :stop (дефолт, явный kwarg) — regress сегодняшнего поведения' do
+  describe 'on_timeout: :stop (дефолт, явный kwarg) — regress сегодняшнего поведения' do
     let(:executor) do
       described_class.new(outcomes: script_source('op_1' => { 'vipay' => :expired }),
                           on_timeout: :stop)
@@ -244,7 +244,7 @@ RSpec.describe Execution::Executor do
     end
   end
 
-  describe 'П7: on_timeout: :continue — expired держит резерв, каскад продолжается до approved' do
+  describe 'on_timeout: :continue — expired держит резерв, каскад продолжается до approved' do
     let(:executor) do
       described_class.new(
         outcomes: script_source('op_1' => { 'vipay' => :expired, 'payflow' => :approved }),
@@ -269,7 +269,7 @@ RSpec.describe Execution::Executor do
     end
   end
 
-  describe 'П7: on_timeout: :continue — все последующие rejected → selected = таймаут-провайдер' do
+  describe 'on_timeout: :continue — все последующие rejected → selected = таймаут-провайдер' do
     let(:executor) do
       described_class.new(
         outcomes: script_source(

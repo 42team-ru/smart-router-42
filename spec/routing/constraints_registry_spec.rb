@@ -30,10 +30,10 @@ RSpec.describe Routing::Constraints do
     )
   end
 
-  # П2 (docs/plans/P6/P2_rate_limit.md): RateLimit больше не в общем REGISTRY --
-  # он отдельный этап, который применяет только Routing::Planner (со смягчением
-  # Ф-4). Constraints.check/eligible? (этот REGISTRY) остаются восемью
-  # проверками, которые вели себя так и до пакета П2.
+  # RateLimit больше не в общем REGISTRY -- он отдельный этап, который
+  # применяет только Routing::Planner (со смягчением, см. Routing::Planner).
+  # Constraints.check/eligible? (этот REGISTRY) остаются восемью проверками,
+  # которые вели себя так и раньше.
   it 'держит восемь проверок в зафиксированном порядке' do
     expect(described_class::REGISTRY).to be_frozen
     expect(described_class::REGISTRY.map { |constraint| constraint.name.split('::').last }).to eq(

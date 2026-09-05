@@ -86,14 +86,14 @@ module DenseMinuteReference
   end
 end
 
-# П2 (docs/plans/P6/P2_rate_limit.md): "Интенсивность" ожила -- у RateLimit
-# теперь есть и значение в снапшоте, и работающий счётчик. Этот спек гоняет
+# "Интенсивность" ожила -- у RateLimit теперь есть и значение в снапшоте, и
+# работающий счётчик. Этот спек гоняет
 # полный пайплайн (Planner + State::Providers + Executor) на плотной очереди
 # (spec/fixtures/queues/dense_minute.json -- 10 операций одной минуты, суммы и
 # банки как в operations_queue_10.json) и проверяет три вещи разом: правило
 # срабатывает по-настоящему (иначе оно снова мертво), правило неприменения
-# (Ф-4) тоже срабатывает хотя бы раз, и оба случая не выводят решение за
-# пределы допустимого по ПРИСТИННОМУ снапшоту организаторов.
+# тоже срабатывает хотя бы раз, и оба случая не выводят решение за пределы
+# допустимого по ПРИСТИННОМУ снапшоту организаторов.
 # rubocop:disable RSpec/MultipleExpectations, RSpec/ExampleLength, RSpec/MultipleMemoizedHelpers
 # -- providers/operations/state/planner/executor/results образуют один пайплайн.
 RSpec.describe 'rate limit в полном пайплайне (плотная минута)' do
@@ -131,7 +131,7 @@ RSpec.describe 'rate limit в полном пайплайне (плотная м
     expect(skip_reasons).to include('rate_limit_exceeded')
   end
 
-  it 'правило неприменения (Ф-4) срабатывает хотя бы раз и details содержит числа лимита' do
+  it 'правило неприменения срабатывает хотя бы раз и details содержит числа лимита' do
     notes = results.filter_map { |result| result.fetch(:plan).trace&.details }
                    .select { |details| details.include?('ограничение не применено') }
 

@@ -2,11 +2,11 @@
 
 require 'json'
 
-# П1 (docs/plans/P6/P1_снапшот_и_override.md) — главный страховочный спек.
-# reference/data/providers.json остаётся пристинным (валидатор организаторов
-# считает допуск по нему). data/providers.json — наш расширенный снапшот:
-# та же основа плюс volume_share_pct/daily_turnover_min/daily_turnover_max
-# (П1) и requests_per_minute_limit (П2, docs/plans/P6/P2_rate_limit.md).
+# Главный страховочный спек. reference/data/providers.json остаётся
+# пристинным (валидатор организаторов считает допуск по нему).
+# data/providers.json — наш расширенный снапшот: та же основа плюс
+# volume_share_pct/daily_turnover_min/daily_turnover_max и
+# requests_per_minute_limit.
 # Если наш снапшот разъедется со снапшотом организаторов по hard-полю,
 # eligible_providers валидатора и наш допуск начнут расходиться молча.
 # rubocop:disable RSpec/DescribeClass -- сравниваются два файла снапшотов, а не класс
@@ -46,7 +46,7 @@ RSpec.describe 'паритет data/providers.json со снапшотом ор�
     end
   end
 
-  it 'множество различий ключей равно ровно набору добавленных полей П1+П2' do
+  it 'множество различий ключей равно ровно набору добавленных полей' do
     added_fields = %w[volume_share_pct daily_turnover_min daily_turnover_max
                       requests_per_minute_limit]
 

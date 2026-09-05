@@ -78,8 +78,8 @@ RSpec.describe Reporting::DeviationCauses do
     include ProviderFactory
 
     # target_pct занижен намеренно (10%, а не паспортные 40) -- иначе реальная
-    # доля (1 из 2 = 50%) не отклонится от цели даже на 5 п.п., и порог из §0
-    # не сработает вовсе.
+    # доля (1 из 2 = 50%) не отклонится от цели даже на 5 п.п., и порог
+    # THRESHOLD_PP не сработает вовсе.
     let(:vipay) { build_provider(payment_system: 'vipay', traffic_percentage: 10) }
     let(:payflow) { build_provider(payment_system: 'payflow', traffic_percentage: 90) }
     let(:providers) { [vipay, payflow] }

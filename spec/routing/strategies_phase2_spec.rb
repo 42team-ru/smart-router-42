@@ -7,7 +7,7 @@ require 'routing/achievable'
 require_relative '../support/provider_factory'
 
 # rubocop:disable-next RSpec/MultipleExpectations
-RSpec.describe 'стратегии Ф2' do
+RSpec.describe 'стратегии CountShare и VolumeShare' do
   include ProviderFactory
 
   let(:vipay) { build_provider(payment_system: 'vipay', traffic_percentage: 40) }
@@ -17,7 +17,7 @@ RSpec.describe 'стратегии Ф2' do
   let(:ledger) { Routing::ShareLedger.new }
 
   it 'регистрирует обе стратегии' do
-    # include, а не eq: реестр общий на весь процесс, к Ф3 в нём уже все семь стратегий.
+    # include, а не eq: реестр общий на весь процесс, в нём уже все семь стратегий.
     expect(Routing::Strategies.known).to include('count_share', 'volume_share')
     expect(Routing::Strategies.build('count_share')).to be_a(Routing::Strategies::CountShare)
   end

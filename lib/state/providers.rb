@@ -14,8 +14,8 @@ module State
   # Незакрытый резерв тихо ломает eligibility на седьмой заявке.
   # expired-резерв закрывает Execution::PendingResolver через #resolve_hold.
   #
-  # П2 (docs/plans/P6/P2_rate_limit.md): счётчик запросов в минуту
-  # (@minute_requests) растёт только в #reserve — по факту отправки запроса
+  # Счётчик запросов в минуту (@minute_requests) растёт только в #reserve —
+  # по факту отправки запроса
   # провайдеру, включая fallback-резерв. Единственное сознательное отступление
   # от таблицы исходов выше: счётчик НЕ уменьшается ни в #rollback, ни в
   # #hold, ни в #commit — интенсивность считает отправленные запросы, а не
@@ -104,7 +104,7 @@ module State
 
     # Закрывает expired-резерв, поставленный #hold. Actual — что на самом деле
     # ответил провайдер по статус-чеку: :approved или :rejected. Прошлые
-    # решения не пересчитываются (§7 ARCH): only вносится delta по (op, provider).
+    # решения не пересчитываются: вносится только delta по (op, provider).
     def resolve_hold(provider, operation, actual)
       validate_actual!(actual)
       name = provider_name(provider)

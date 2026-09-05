@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# T-6. Девять граничных случаев из ARCHITECTURE.md §16.
+# Девять граничных случаев из ARCHITECTURE.md.
 # Каждый case — отдельный describe, тест один.
 # Все используемые хелперы (build_provider, build_operation, build_spacepayments)
 # автоматически подключаются из spec/support/build_helpers.rb.
@@ -21,7 +21,7 @@ require 'execution/executor'
 require 'execution/outcome_source/always_ok'
 
 # rubocop:disable RSpec/DescribeClass -- файл собирает 9 граничных случаев, а не один класс
-RSpec.describe 'граничные случаи §16' do
+RSpec.describe 'граничные случаи' do
   # rubocop:enable RSpec/DescribeClass
 
   # 1. null в любом лимите → ограничения нет ─────────────────────────────────
@@ -185,8 +185,8 @@ RSpec.describe 'граничные случаи §16' do
     end
   end
 
-  # Доп. (П2, docs/plans/P6/P2_rate_limit.md, риск «created_at без секунд/в
-  # другом формате»): срез created_at[0, 16] в RateLimit.minute_key и в
+  # Риск «created_at без секунд/в другом формате»: срез created_at[0, 16] в
+  # RateLimit.minute_key и в
   # State::Providers#reserve обязан не ронять прогон даже на нестандартной
   # строке времени -- он просто отрезает сколько есть, без ArgumentError.
   describe 'нестандартный created_at (короче 16 символов) → срез не роняет прогон' do

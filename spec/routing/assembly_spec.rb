@@ -97,7 +97,7 @@ RSpec.describe Routing::Assembly do
   end
 
   describe Routing::Layers do
-    it 'реестр содержит первый слой Ф4' do
+    it 'реестр содержит оба слоя' do
       expect(described_class.known).to eq(%w[budget_headroom share_ceiling])
     end
 

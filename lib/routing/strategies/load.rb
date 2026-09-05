@@ -21,9 +21,6 @@ module Routing
     #
     # Доли сравниваются перекрёстным умножением, без деления: сравнение дробей
     # через float в решающем пути запрещено.
-    #
-    # Дальше по коду: Routing::Constraints::InProgress — жёсткий предел по той
-    # же ёмкости; State::Providers — как счётчик меняется по ходу очереди.
     class Load < Base
       def rank(candidates, _operation, _state)
         candidates.sort { |left, right| compare(left, right) }

@@ -12,27 +12,27 @@ require_relative 'retarget'
 require_relative 'utilization'
 
 module Reporting
-  # A-3..A-8: сборка routing_report.json из уже готовых решений.
+  # Сборка routing_report.json из уже готовых решений.
   #
   # Вход — те же пары (Domain::Operation, Execution::Outcome), что и у
   # DecisionsWriter, плюс снимок провайдеров (цели, лимиты, паспортные
   # конверсии) и калибровка Io::HistoryLoader (наблюдаемые конверсии).
   #
-  # achievable_pct считается по-настоящему: Routing::Achievable.for_queue (R-12)
-  # на множестве допустимых по ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт
+  # achievable_pct считается по-настоящему: Routing::Achievable.for_queue на
+  # множестве допустимых по ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт
   # только в отчёт и никогда в принятие решений. Тот же achievable/eligibility
-  # переиспользуют A-7 (DeviationCauses) и X-6 (Retarget) -- считается один раз
-  # в #sections, а не заново в каждой секции.
+  # переиспользуют DeviationCauses и Retarget -- считается один раз в #sections,
+  # а не заново в каждой секции.
   #
   # benchmark остаётся заглушкой только как дефолт на случай отсутствия
   # kwarg-а (см. #benchmark ниже) -- в реальном прогоне bin/route всегда
-  # передаёт настоящий эталон (X-5, lib/offline/*).
+  # передаёт настоящий эталон (lib/offline/*).
   # rubocop:disable-next Metrics/ModuleLength -- отчёт собран в одном публичном фасаде.
   module ReportBuilder
     FALLBACK_PROVIDER = 'spacepayments'
 
-    # comparison: секция П4 (docs/plans/P6/P4_сравнение.md), приходит готовым
-    # хешем из Offline::Comparison.build, как benchmark -- внутри build ничего
+    # comparison: секция приходит готовым хешем из Offline::Comparison.build,
+    # как benchmark -- внутри build ничего
     # не гоняет. nil (дефолт) -- ключа `comparison` в отчёте нет вовсе, не
     # null-заглушка: старые вызовы без этого kwarg-а получают отчёт прежней формы.
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
@@ -142,8 +142,8 @@ module Reporting
 
     # Классифицирует одну заявку: первая реальная попытка approved,
     # восстановлена каскадом (>1 реальной попытки, approved), либо каскад
-    # исчерпан (правило E-4: итог не approved, но selected остаётся
-    # последним реальным кандидатом, а не spacepayments).
+    # исчерпан (итог не approved, но selected остаётся последним реальным
+    # кандидатом, а не spacepayments).
     def self.fallback_stat(outcome)
       return :exhausted unless outcome.result == :approved
 

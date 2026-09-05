@@ -37,7 +37,7 @@ RSpec.describe Config::Loader do
     end.to raise_error(Config::SchemaError, /goals/)
   end
 
-  describe 'П7: ключ cascade' do
+  describe 'ключ cascade' do
     it 'подставляет пустой hash, если ключа cascade нет вовсе' do
       config = load_yaml("strategy: count_share\nfallback_provider: spacepayments\n")
 

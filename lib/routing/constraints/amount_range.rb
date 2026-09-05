@@ -22,8 +22,6 @@ module Routing
     # Не путать со стратегией Strategies::AmountRange: та работает с полосами
     # сумм из конфига и влияет на порядок уже допущенных. Здесь — жёсткий
     # отсев по лимитам самого провайдера, и одно другое не заменяет.
-    #
-    # Дальше по коду: Routing::Details.below_min и .above_max — тексты причин.
     class AmountRange < Base
       MIN_REASON = 'amount_below_minimum'
       MAX_REASON = 'amount_exceeds_limit'

@@ -19,9 +19,6 @@ module Routing
     # не нашлось внешнего провайдера, осталась бы вообще без исполнителя.
     # Эталонный допуск организаторов делает то же исключение, так что расхождения
     # с их проверкой здесь нет.
-    #
-    # Дальше по коду: Execution::Executor#run_fallback — что происходит, когда
-    # каскад пуст и заявку принимает fallback.
     class TrafficShare < Base
       REASON = 'zero_traffic_share'
       FALLBACK_PROVIDER = 'spacepayments'

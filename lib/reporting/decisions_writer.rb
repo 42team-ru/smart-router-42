@@ -3,7 +3,7 @@
 require 'json'
 
 module Reporting
-  # A-1: сборка routing_decisions.json из уже готовых решений.
+  # Сборка routing_decisions.json из уже готовых решений.
   #
   # Здесь нет логики допуска или каскада — только форма файла. Вход:
   # пары (Domain::Operation, Execution::Outcome), уже посчитанные

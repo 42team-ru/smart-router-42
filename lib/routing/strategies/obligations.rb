@@ -30,9 +30,6 @@ module Routing
     # Отсутствующий минимум или максимум означает, что такого обязательства
     # нет, а не что оно равно нулю. Провайдер без обязательств всегда в средней
     # группе.
-    #
-    # Дальше по коду: config/routing.yml, ключ obligations — где задаются
-    # пороги; Io::ProviderOverrides — как они накладываются на снапшот.
     class Obligations < Base
       MAX_THRESHOLD_NUMERATOR = 9
       MAX_THRESHOLD_DENOMINATOR = 10

@@ -66,8 +66,8 @@ RSpec.describe Routing::Strategies::Obligations do
     expect(ranked.first.name).to eq('apay')
   end
 
-  # П1 (docs/plans/P6/P1_снапшот_и_override.md): пороги daily_turnover_min/max —
-  # реальные числа снапшота data/providers.json (payflow.daily_turnover_min =
+  # Пороги daily_turnover_min/max — реальные числа снапшота
+  # data/providers.json (payflow.daily_turnover_min =
   # 2_000_000, vipay.daily_turnover_max = 5_000_000, дословно из ТЗ). Наблюдаемый
   # оборот (daily_approved_amount) переопределяется на сценарий: снапшот один
   # на все прогоны дня, а "недобрал"/"перебрал" — это разные моменты дня.
