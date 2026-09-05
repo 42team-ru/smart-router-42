@@ -23,6 +23,9 @@ require_relative '../lib/bench/measurement'
 
 DEFAULT_CONFIG = File.expand_path('../config/bench.yml', __dir__)
 
+TOP_PROVIDERS = 10
+TOP_SKIP_REASONS = 5
+
 def usage
   "Использование: bin/bench --level LEVEL [--seed SEED] [--dir DIR] [--config PATH]\n" \
     "Уровни: #{Synthetic::Levels.known.join(', ')}"
@@ -80,21 +83,105 @@ def ensure_input(level, dir, seed)
 end
 
 def print_report(result, level)
+  print_header(result, level)
+  print_oracle_note(level)
+  print_benchmark(result.benchmark)
+  print_analytics(result.accumulator)
+  print_verdict(result.report)
+end
+
+def print_header(result, level)
   puts "\n=== #{level.name} (#{level.operations} операций, #{level.providers} провайдеров, " \
        "профиль #{level.profile}) ==="
   puts "обработано: #{result.operations_seen}"
   Bench::Measurement.format_snapshot(result.measurement, result.operations_seen).each do |line|
     puts line
   end
-  print_oracle_note(level)
-  print_verdict(result.report)
 end
 
+# Аналитика уже посчитана Accumulator'ом по ходу прогона (O(1) на операцию) —
+# печатаем то, что и так лежит в памяти. Полный отчёт со всеми секциями пишется
+# в analytics.json рядом со входными данными: в консоль лезет только сводка,
+# на 500 провайдерах таблица целиком нечитаема.
+def print_analytics(accumulator)
+  rows = accumulator.distribution.reject { |_name, stats| stats['count'].zero? }
+                    .sort_by { |_name, stats| -stats['count'] }
+  return if rows.empty?
+
+  print_distribution(rows, accumulator.attempt_distribution)
+  print_skip_reasons(accumulator.skip_reasons)
+  print_fallback(accumulator.fallback, accumulator.delivered, accumulator.total)
+end
+
+def print_distribution(rows, attempts)
+  puts "\nраспределение (топ #{[rows.size, TOP_PROVIDERS].min} из #{rows.size} задействованных):"
+  rows.first(TOP_PROVIDERS).each { |name, stats| puts analytics_row(name, stats, attempts) }
+end
+
+def analytics_row(name, stats, attempts)
+  conversion = attempts.dig(name, 'observed_conversion')
+  conversion_text = conversion.nil? ? '—' : format('%.3f', conversion)
+  "  #{name.ljust(12)} #{stats['count'].to_s.rjust(9)} " \
+    "#{format('%5.1f', stats['share_pct'])}%   конверсия #{conversion_text}"
+end
+
+def print_skip_reasons(reasons)
+  return if reasons.empty?
+
+  top = reasons.sort_by { |_reason, count| -count }.first(TOP_SKIP_REASONS)
+  puts "причины отсева: #{top.map { |reason, count| "#{reason} #{count}" }.join(', ')}"
+end
+
+def print_fallback(fallback, delivered, total)
+  puts "доставлено: #{delivered} из #{total} " \
+       "(#{format('%.1f', total.zero? ? 0 : delivered.to_f / total * 100)}%)"
+  puts "fallback: #{fallback['first_attempt_success']} с первой попытки, " \
+       "#{fallback['recovered_by_fallback']} спасено каскадом, " \
+       "#{fallback['spacepayments_used']} в spacepayments, " \
+       "#{fallback['cascade_exhausted']} каскад исчерпан"
+end
+
+# Тот же набор секций, что в боевом routing_report_test.json, кроме тех, что
+# требуют Routing::Achievable (см. комментарий в Bench::Accumulator).
+def write_analytics(accumulator, dir, level, benchmark = nil)
+  path = File.join(dir, 'analytics.json')
+  payload = analytics_payload(accumulator, level)
+  payload['benchmark'] = benchmark if benchmark
+  File.write(path, "#{JSON.pretty_generate(payload)}\n")
+  puts "аналитика: #{path}"
+end
+
+def analytics_payload(accumulator, level)
+  {
+    'level' => level.name, 'total_operations' => accumulator.total,
+    'delivered' => accumulator.delivered, 'queue_errors' => accumulator.queue_errors,
+    'distribution' => accumulator.distribution,
+    'volume_distribution' => accumulator.volume_distribution,
+    'attempt_distribution' => accumulator.attempt_distribution,
+    'skip_reasons' => accumulator.skip_reasons, 'fallback' => accumulator.fallback,
+    'digest' => accumulator.digest_hex
+  }
+end
+
+# На потоковых уровнях оракула нет по построению: ему нужна вся очередь и все
+# назначения в памяти, а ради отказа от этого потоковый режим и сделан.
 def print_oracle_note(level)
   return if level.run_oracle
 
-  puts 'оракул (Offline::Oracle) и достижимость (Routing::Achievable) отключены на этом ' \
-       'уровне — O(operations·providers) не масштабируется до этого N (см. план бенчмарка)'
+  puts 'офлайн-эталон не считается: уровень потоковый, вся очередь в память не ' \
+       'загружается — проверяются конструктивные якоря из expectation.json'
+end
+
+def print_benchmark(benchmark)
+  return if benchmark.nil?
+
+  bound = benchmark['offline_bound']
+  ours = benchmark['our_online_result']
+  ratio = benchmark['competitive_ratio']
+  puts "офлайн-эталон: доставлено #{bound['delivered']}, отклонение " \
+       "#{bound['max_deviation_pp']} п.п.; наш прогон: доставлено #{ours['delivered']}, " \
+       "отклонение #{ours['max_deviation_pp']} п.п."
+  puts "competitive_ratio: #{ratio.nil? ? 'n/a' : ratio}"
 end
 
 def print_verdict(report)
@@ -111,7 +198,14 @@ def build_runner(options, level)
   expectation = JSON.parse(File.read(expectation_path))
   Bench::Runner.new(providers_path: providers_path, queue_path: queue_path,
                     config_path: options[:config], expectation: expectation,
-                    mode: level.mode, seed: options[:seed])
+                    mode: level.mode, seed: options[:seed], run_oracle: level.run_oracle)
+end
+
+def run_level(options, level)
+  result = build_runner(options, level).run
+  print_report(result, level)
+  write_analytics(result.accumulator, options[:dir_resolved], level, result.benchmark)
+  result
 end
 
 def main(argv)
@@ -119,9 +213,7 @@ def main(argv)
   level = Synthetic::Levels.fetch(options[:level])
   options[:dir_resolved] = options[:dir] || File.join('tmp', 'bench', level.name)
 
-  result = build_runner(options, level).run
-  print_report(result, level)
-  exit(result.report.ok ? 0 : 1)
+  exit(run_level(options, level).report.ok ? 0 : 1)
 end
 
 main(ARGV) if $PROGRAM_NAME == __FILE__
