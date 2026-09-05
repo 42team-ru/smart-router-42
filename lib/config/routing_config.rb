@@ -10,11 +10,16 @@ module Config
   # обязательный keyword, сохраняет их рабочими без правки. comparison по
   # умолчанию [] -- П4 (docs/plans/P6/P4_сравнение.md) добавил список офлайн-
   # вариантов сравнения тем же приёмом.
+  # Путь к истории операций по умолчанию. Значение то же, что раньше было
+  # зашито константой внутри стратегии conversion и в bin/route.
+  DEFAULT_HISTORY_PATH = 'reference/data/operations_history.csv'
+
   RoutingConfig = Data.define(
     :strategy, :layers, :goals, :strategy_selection, :outcomes,
-    :amount_ranges, :obligations, :rate_limits, :fallback_provider, :cascade, :comparison
+    :amount_ranges, :obligations, :rate_limits, :fallback_provider, :cascade, :comparison,
+    :history_path
   ) do
-    def initialize(cascade: {}, comparison: [], **rest)
+    def initialize(cascade: {}, comparison: [], history_path: DEFAULT_HISTORY_PATH, **rest)
       super
     end
   end

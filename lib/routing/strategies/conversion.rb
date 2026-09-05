@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require_relative '../strategies'
-require_relative '../../io/history_loader'
 
 module Routing
   module Strategies
@@ -27,15 +26,18 @@ module Routing
     # Execution::OutcomeSource::Deterministic — та же калиброванная цифра
     # используется как порог при симуляции исходов.
     class Conversion < Base
-      HISTORY_PATH = File.expand_path('../../../reference/data/operations_history.csv', __dir__)
+      # history — наблюдаемые конверсии, уже загруженные bin/route по пути из
+      # конфига (ключ history_path). Стратегия файл не открывает: диска касается
+      # только точка входа, иначе путь к данным оказался бы зашит в двух местах
+      # и разъехался бы при первой же смене расположения файла.
+      def self.from_config(_config, history: nil) = new(observed: history || {})
 
-      def initialize(observed: self.class.default_observed)
+      # Без данных стратегия честно вырождается: все конверсии нулевые, порядок
+      # задаёт имя провайдера. Молчаливое чтение файла «на всякий случай» здесь
+      # хуже — оно скрыло бы, что данные не доехали.
+      def initialize(observed: {})
         super()
         @observed = observed
-      end
-
-      def self.default_observed
-        @default_observed ||= Io::HistoryLoader.load(HISTORY_PATH)
       end
 
       def rank(candidates, _operation, _state)

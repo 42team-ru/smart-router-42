@@ -13,6 +13,7 @@ module Config
     KNOWN_TOP_LEVEL_KEYS = %w[
       strategy layers goals strategy_selection outcomes
       amount_ranges obligations rate_limits fallback_provider cascade comparison
+      history_path
     ].freeze
 
     def self.validate!(raw)

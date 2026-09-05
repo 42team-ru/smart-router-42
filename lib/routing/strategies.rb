@@ -40,9 +40,14 @@ module Routing
       #
       # Без конфига или без фабрики создаётся простым new: большинство стратегий
       # параметров не имеет.
-      def build(name, config: nil)
+      # history — уже загруженные наблюдаемые конверсии (Io::HistoryLoader).
+      # Стратегии, которым они нужны, объявляют from_config и принимают их
+      # именованным аргументом; читать файл самим им не положено — диска
+      # касается только bin/route.
+      def build(name, config: nil, history: nil)
         klass = fetch!(name)
-        return klass.from_config(config) if config && klass.respond_to?(:from_config)
+        return klass.from_config(config, history: history) if config &&
+                                                              klass.respond_to?(:from_config)
 
         klass.new
       end

@@ -57,7 +57,6 @@ Routing::Layers.load_all!
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
-HISTORY_PATH = 'reference/data/operations_history.csv'
 
 def usage
   'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] ' \
@@ -146,6 +145,12 @@ end
 def apply_overrides(providers, config)
   Io::ProviderOverrides.apply(providers, obligations: config.obligations,
                                          rate_limits: config.rate_limits)
+rescue RuntimeError => e
+  fail_with(e.message)
+end
+
+def load_history(path)
+  Io::HistoryLoader.load(path)
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -358,14 +363,14 @@ rescue KeyError => e
   fail_with(e.message)
 end
 
-def build_strategy(config, override)
-  Routing::Assembly.strategy(config: config, override: override)
+def build_strategy(config, override, history)
+  Routing::Assembly.strategy(config: config, override: override, history: history)
 rescue KeyError => e
   fail_with(e.message)
 end
 
-def build_selector(config, override)
-  Routing::Assembly.selector(config: config, override: override)
+def build_selector(config, override, history)
+  Routing::Assembly.selector(config: config, override: override, history: history)
 rescue KeyError, ArgumentError => e
   fail_with(e.message)
 end
@@ -396,14 +401,18 @@ def load_inputs(options)
   raw_providers = load_providers(options[:providers_path])
   warn_unapplied_config(config, raw_providers)
   providers = apply_overrides(raw_providers, config)
+  # История читается один раз здесь и раздаётся всем, кому нужна: источнику
+  # исходов (пороги конверсии), стратегии conversion (порядок кандидатов) и
+  # отчёту. Путь берётся из конфига, ключ history_path.
+  history = load_history(config.history_path)
   {
     providers: providers,
     operations: load_queue(options[:queue_path]),
-    history: Io::HistoryLoader.load(HISTORY_PATH),
+    history: history,
     config: config,
     layers: build_layers(config),
-    strategy: build_strategy(config, options[:strategy]),
-    selector: build_selector(config, options[:strategy])
+    strategy: build_strategy(config, options[:strategy], history),
+    selector: build_selector(config, options[:strategy], history)
   }
 end
 

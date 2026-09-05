@@ -41,13 +41,37 @@ RSpec.describe Routing::Strategies::Conversion do
     expect(ranked.last.name).to eq('newpay')
   end
 
-  describe 'дефолт без аргументов' do
+  describe 'без данных истории' do
     subject(:strategy) { described_class.new }
 
-    it 'читает калибровку из reference/data/operations_history.csv и не падает' do
+    # Файл стратегия не открывает: диска касается только bin/route. Без данных
+    # она обязана выродиться предсказуемо, а не притащить их сама.
+    it 'не падает и упорядочивает по имени' do
       ranked = strategy.rank(candidates, operation, state)
 
-      expect(ranked.map(&:name)).to eq(%w[vipay quickpay payflow])
+      expect(ranked.map(&:name)).to eq(candidates.map(&:name).sort)
+    end
+  end
+
+  describe '.from_config' do
+    # Конфиг стратегии не нужен вовсе — данные приходят отдельным аргументом.
+    # nil здесь и есть утверждение: от содержимого конфига она не зависит.
+    let(:config) { nil }
+
+    it 'берёт конверсии из переданной истории, а не из конфига' do
+      strategy = described_class.from_config(
+        config, history: { 'vipay' => 0.78, 'payflow' => 0.474, 'quickpay' => 0.675 }
+      )
+
+      expect(strategy.rank(candidates, operation, state).map(&:name))
+        .to eq(%w[vipay quickpay payflow])
+    end
+
+    it 'без истории вырождается вместо чтения файла' do
+      strategy = described_class.from_config(config, history: nil)
+
+      expect(strategy.rank(candidates, operation, state).map(&:name))
+        .to eq(candidates.map(&:name).sort)
     end
   end
 end

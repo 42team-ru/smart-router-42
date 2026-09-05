@@ -34,7 +34,9 @@ module Routing
         @ranges = ranges
       end
 
-      def self.from_config(config) = new(ranges: config.amount_ranges)
+      # Реестр передаёт всем стратегиям одинаковый набор именованных аргументов
+      # (в том числе history). Этой нужен только config, остальное поглощается.
+      def self.from_config(config, **_rest) = new(ranges: config.amount_ranges)
 
       def rank(candidates, operation, _state)
         preferred = preferred_name(operation.amount)

@@ -15,7 +15,8 @@ module Config
   module Loader
     OPTIONAL_DEFAULTS = {
       layers: [], goals: {}, strategy_selection: {}, outcomes: {},
-      amount_ranges: [], obligations: {}, rate_limits: {}, cascade: {}, comparison: []
+      amount_ranges: [], obligations: {}, rate_limits: {}, cascade: {}, comparison: [],
+      history_path: DEFAULT_HISTORY_PATH
     }.freeze
 
     def self.load(path)
