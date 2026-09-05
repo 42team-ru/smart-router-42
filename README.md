@@ -163,6 +163,10 @@ payflow psi 0.033 (ниже порога на 0.062) -> с 1 на 2;
 
 ```sh
 bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/adwords.yml --out-dir /tmp/adwords
+
+# все предикаты селектора с комментариями — справочник
+bundle exec bin/route reference/data/operations_queue_10.json \
+  --config config/examples/selector_full.yml
 bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/goals_reversed.yml --out-dir /tmp/goals-reversed
 bundle exec bin/route reference/data/operations_queue_10.json --config config/examples/selector.yml --out-dir /tmp/selector
 ```
