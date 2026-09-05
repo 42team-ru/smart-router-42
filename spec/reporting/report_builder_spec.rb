@@ -177,6 +177,21 @@ RSpec.describe Reporting::ReportBuilder do
         .to equal(benchmark)
     end
 
+    # П4 (docs/plans/P6/P4_сравнение.md): comparison приходит готовым kwarg-ом,
+    # как benchmark -- build его не считает и не трогает.
+    it 'без kwarg-а comparison ключа `comparison` в отчёте нет вовсе' do
+      expect(report).not_to have_key('comparison')
+    end
+
+    it 'с kwarg-ом comparison ключ на месте и передаётся без изменений' do
+      comparison = { 'baseline' => 'count_share', 'variants' => {}, 'note' => 'тест' }
+
+      result = described_class.build(pairs, providers: providers, history: history,
+                                            comparison: comparison)
+
+      expect(result['comparison']).to equal(comparison)
+    end
+
     # Синтетический снапшот фикстуры не допускает НИКОГО ни до одной из трёх
     # операций (см. комментарий у теста distribution выше) -- Achievable не
     # может приписать отклонение ни допуску (:only_option), ни дневному

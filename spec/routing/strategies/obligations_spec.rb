@@ -2,6 +2,7 @@
 
 require 'routing/share_ledger'
 require 'routing/strategies/obligations'
+require 'io/providers_loader'
 require_relative '../../support/provider_factory'
 require_relative '../../support/shared/strategy_contract'
 
@@ -63,5 +64,52 @@ RSpec.describe Routing::Strategies::Obligations do
     ranked = strategy.rank([payflow_near_min, apay], operation, ledger)
 
     expect(ranked.first.name).to eq('apay')
+  end
+
+  # П1 (docs/plans/P6/P1_снапшот_и_override.md): пороги daily_turnover_min/max —
+  # реальные числа снапшота data/providers.json (payflow.daily_turnover_min =
+  # 2_000_000, vipay.daily_turnover_max = 5_000_000, дословно из ТЗ). Наблюдаемый
+  # оборот (daily_approved_amount) переопределяется на сценарий: снапшот один
+  # на все прогоны дня, а "недобрал"/"перебрал" — это разные моменты дня.
+  # rubocop:disable-next RSpec/MultipleMemoizedHelpers -- snapshot/payflow/vipay
+  # образуют один сценарий: пороги реальные, оборот переопределён под сценарий.
+  describe 'на порогах боевого снапшота data/providers.json' do
+    let(:snapshot_providers) { Io::ProvidersLoader.load('data/providers.json') }
+    let(:snapshot_payflow) { snapshot_providers.find { |p| p.name == 'payflow' } }
+    let(:snapshot_vipay) { snapshot_providers.find { |p| p.name == 'vipay' } }
+    let(:payflow) { snapshot_payflow.with(daily_approved_amount: 500_000) }
+    let(:vipay) { snapshot_vipay }
+
+    # rubocop:disable-next RSpec/MultipleExpectations -- порог и
+    # ранжирование проверяются вместе, числа из снапшота не выдуманы.
+    it 'payflow, не набравший daily_turnover_min, стоит выше vipay' do
+      expect(snapshot_payflow.daily_turnover_min).to eq(2_000_000)
+      expect(payflow.daily_approved_amount).to be < payflow.daily_turnover_min
+
+      ranked = strategy.rank([vipay, payflow], operation, state)
+
+      expect(ranked.first.name).to eq('payflow')
+    end
+
+    # rubocop:disable-next RSpec/ExampleLength, RSpec/MultipleExpectations -- порог 90% и
+    # ранжирование проверяются вместе, числа из снапшота не выдуманы.
+    it 'vipay, перешагнувший 90% от daily_turnover_max, стоит ниже payflow' do
+      near_max_vipay = snapshot_vipay.with(daily_approved_amount: 4_800_000)
+      turnover = near_max_vipay.daily_approved_amount
+      threshold = near_max_vipay.daily_turnover_max
+
+      expect(near_max_vipay.daily_turnover_max).to eq(5_000_000)
+      expect(turnover * 10 >= threshold * 9).to be(true)
+
+      ranked = strategy.rank([near_max_vipay, payflow], operation, state)
+
+      expect(ranked.map(&:name)).to eq(%w[payflow vipay])
+    end
+
+    it 'explain называет числа оборота, а не общие слова' do
+      text = strategy.explain([payflow, vipay], operation, state)
+
+      expect(text).to include('payflow').and match(/\d/)
+    end
   end
 end

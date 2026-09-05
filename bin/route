@@ -23,6 +23,7 @@ require 'json'
 require 'optparse'
 require 'fileutils'
 require_relative '../lib/io/providers_loader'
+require_relative '../lib/io/provider_overrides'
 require_relative '../lib/io/queue_loader'
 require_relative '../lib/io/history_loader'
 require_relative '../lib/config/loader'
@@ -40,6 +41,7 @@ require_relative '../lib/reporting/console_summary'
 require_relative '../lib/offline/objective'
 require_relative '../lib/offline/oracle'
 require_relative '../lib/offline/benchmark_block'
+require_relative '../lib/offline/comparison'
 
 # CFG-3: каталог стратегий загружается целиком. Новая стратегия — файл в
 # lib/routing/strategies/ плюс строка strategy: в конфиге; bin/route править не
@@ -97,7 +99,14 @@ end
 def default_options
   # strategy здесь намеренно нет: имя стратегии приходит из конфига, а
   # options[:strategy] остаётся nil, пока не передан --strategy.
-  { out_dir: 'out', providers_path: 'reference/data/providers.json',
+  #
+  # Ф-3 (docs/plans/P6): providers_path по умолчанию — наш расширенный
+  # снапшот data/providers.json (побайтовая копия снапшота организаторов
+  # плюс volume_share_pct/daily_turnover_min/daily_turnover_max), а не
+  # reference/data/providers.json. Пристинный файл организаторов остаётся
+  # эталоном допуска для make validate; --providers reference/data/providers.json
+  # по-прежнему доступен явным флагом.
+  { out_dir: 'out', providers_path: 'data/providers.json',
     config_path: 'config/routing.yml', outcomes: nil, seed: nil }
 end
 
@@ -115,6 +124,18 @@ end
 
 def load_providers(path)
   Io::ProvidersLoader.load(path)
+rescue RuntimeError => e
+  fail_with(e.message)
+end
+
+# Ф-3 (docs/plans/P6/P1, П2): obligations/rate_limits из конфига — override
+# поверх снапшота, применяется после warn_unapplied_config (которая честно
+# смотрит на провайдеров ДО наложения override — на data/providers.json оба
+# поля после П1+П2 уже реальны, так что предупреждение не печатается; на
+# пристинном reference/data/providers.json печатается по-прежнему).
+def apply_overrides(providers, config)
+  Io::ProviderOverrides.apply(providers, obligations: config.obligations,
+                                         rate_limits: config.rate_limits)
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -149,6 +170,13 @@ end
 def outcome_seed(options, config)
   options[:seed] || config.outcomes.fetch('seed', '42')
 end
+
+# П7 (docs/plans/P6/P7): значения уже прошли Config::SchemaError на этапе
+# загрузки конфига (SchemaRules.validate_cascade!), поэтому здесь только
+# дефолт на отсутствующий подключ -- как outcome_source_name/outcome_seed выше.
+def cascade_exhausted(config) = config.cascade.fetch('exhausted', 'last_candidate').to_sym
+
+def cascade_on_timeout(config) = config.cascade.fetch('on_timeout', 'stop').to_sym
 
 def outcome_conversions(config, providers, history)
   return history if config.outcomes.fetch('calibrate_from_history', false)
@@ -200,7 +228,8 @@ def build_pipeline(providers, options, strategy, selector, fallback_provider, la
     planner: Routing::Planner.new(providers: providers, strategy: strategy, selector: selector,
                                   fallback_provider: fallback_provider,
                                   layers: Routing::LayerStack.new(layers)),
-    executor: Execution::Executor.new(outcomes: outcomes),
+    executor: Execution::Executor.new(outcomes: outcomes, exhausted: cascade_exhausted(config),
+                                      on_timeout: cascade_on_timeout(config)),
     outcomes: outcomes,
     state: state,
     ledger: state.shares,
@@ -225,7 +254,7 @@ def build_pairs(operations, providers, options, inputs)
 end
 
 # rubocop:disable-next Metrics/ParameterLists -- сформированные секции отчёта передаются явно.
-def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil)
+def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, comparison: nil)
   FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
@@ -233,7 +262,7 @@ def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil)
   Reporting::DecisionsWriter.write(decisions_path, pairs)
   Reporting::ReportBuilder.write(
     report_path, pairs, providers: providers, history: history, strategy: strategy.name,
-                        benchmark: benchmark
+                        benchmark: benchmark, comparison: comparison
   )
 
   [decisions_path, report_path]
@@ -253,6 +282,28 @@ def build_benchmark(pairs, inputs, outcomes, options)
     seed: outcome_seed(options, inputs[:config]),
     local_search_skipped: inputs[:operations].size > Offline::Oracle::LOCAL_SEARCH_MAX_OPS
   )
+end
+
+# П4 (docs/plans/P6/P4_сравнение.md): comparison считается один раз здесь и
+# передаётся кому угодно готовым хешем (как benchmark) -- ReportBuilder внутри
+# ничего не гоняет (spec/reporting/report_builder_spec.rb). Пустой/отсутствующий
+# ключ comparison в конфиге -- законный вход: секции в отчёте нет вовсе.
+def build_comparison(inputs)
+  return nil if inputs[:config].comparison.empty?
+
+  Offline::Comparison.build(
+    variants: inputs[:config].comparison, operations: inputs[:operations],
+    providers: inputs[:providers], config: inputs[:config], history: inputs[:history],
+    baseline: comparison_baseline_name(inputs[:config])
+  )
+end
+
+# Config::SchemaRules.validate_comparison! уже гарантировал на загрузке
+# конфига, что ровно такой вариант существует -- здесь просто находим его имя.
+def comparison_baseline_name(config)
+  config.comparison.find do |variant|
+    variant['strategy'] == config.strategy && variant.fetch('layers', []) == config.layers
+  end.fetch('name')
 end
 
 # Config::SchemaError наследует RuntimeError: битый или отсутствующий конфиг
@@ -283,6 +334,11 @@ rescue KeyError, ArgumentError => e
   fail_with(e.message)
 end
 
+# Ф-3 (docs/plans/P6/P1, П2): providers здесь — снапшот ДО apply_overrides.
+# После П1 data/providers.json несёт daily_turnover_min/max, после П2 —
+# requests_per_minute_limit, поэтому обе проверки ниже больше не печатают
+# предупреждение на дефолтном снапшоте; на пристинном reference/data/providers.json
+# (флаг --providers) оба предупреждения печатаются по-прежнему.
 def warn_unapplied_config(config, providers)
   warn_missing_provider_field(config.rate_limits, providers, :requests_per_minute_limit,
                               'rate_limits', 'requests_per_minute_limit')
@@ -301,8 +357,9 @@ end
 # rubocop:disable-next Metrics/MethodLength -- загрузка входов и предупреждения делаются единожды до цикла очереди.
 def load_inputs(options)
   config = load_config(options[:config_path])
-  providers = load_providers(options[:providers_path])
-  warn_unapplied_config(config, providers)
+  raw_providers = load_providers(options[:providers_path])
+  warn_unapplied_config(config, raw_providers)
+  providers = apply_overrides(raw_providers, config)
   {
     providers: providers,
     operations: load_queue(options[:queue_path]),
@@ -321,12 +378,13 @@ def main(argv)
 
   pairs, outcomes = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
   benchmark = build_benchmark(pairs, inputs, outcomes, options)
+  comparison = build_comparison(inputs)
   decisions_path, report_path = write_outputs(
     options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy],
-    benchmark: benchmark
+    benchmark: benchmark, comparison: comparison
   )
 
-  print_console_summary(pairs, inputs, benchmark)
+  print_console_summary(pairs, inputs, benchmark, comparison)
 
   puts "Прочитано операций: #{inputs[:operations].size}"
   puts "Записано: #{decisions_path}"
@@ -334,14 +392,15 @@ def main(argv)
 end
 
 # D-1: report строится второй раз намеренно -- .write (в write_outputs) уже
-# построил и отбросил свой экземпляр. Дорогая часть (офлайн-оракул) в
-# benchmark уже посчитана один раз в build_benchmark и передаётся сюда
-# готовым хешем, повторно не считается -- пересчитывается только дешёвая
-# часть (distribution/achievable/deviation_causes/recommendations).
-def print_console_summary(pairs, inputs, benchmark)
+# построил и отбросил свой экземпляр. Дорогая часть (офлайн-оракул и П4-
+# сравнение) в benchmark/comparison уже посчитана один раз в build_benchmark/
+# build_comparison и передаётся сюда готовыми хешами, повторно не считается --
+# пересчитывается только дешёвая часть (distribution/achievable/
+# deviation_causes/recommendations).
+def print_console_summary(pairs, inputs, benchmark, comparison)
   report = Reporting::ReportBuilder.build(
     pairs, providers: inputs[:providers], history: inputs[:history],
-           strategy: inputs[:strategy].name, benchmark: benchmark
+           strategy: inputs[:strategy].name, benchmark: benchmark, comparison: comparison
   )
 
   Reporting::ConsoleSummary.operation_lines(pairs).each { |line| puts line }

@@ -41,6 +41,12 @@ RSpec.describe 'переключение поведения конфигом' do
 
   # Боевой config/routing.yml только читается: правка уходит во временный файл.
   # sub по конкретной строке, чтобы спек падал, если строка из YAML исчезла.
+  #
+  # П4 (docs/plans/P6/P4_сравнение.md): comparison требует, чтобы один из
+  # вариантов буквально совпадал с боевыми strategy/layers (иначе SchemaError).
+  # Этот файл меняет strategy ради ДРУГИХ проверок (переключение стратегии
+  # одной строкой YAML) и не обязан держать comparison согласованным с новым
+  # значением, поэтому секция обрезается -- как в spec/bin/route_spec.rb.
   def config_with(dir, replacements)
     source = File.read(production_config)
     replacements.each do |line, replacement|
@@ -49,7 +55,7 @@ RSpec.describe 'переключение поведения конфигом' do
       source = source.sub(line, replacement)
     end
     path = File.join(dir, 'routing.yml')
-    File.write(path, source)
+    File.write(path, source.sub(/\ncomparison:.*\z/m, "\n"))
     path
   end
 

@@ -34,9 +34,41 @@ module Reporting
         '',
         fallback_line(report),
         benchmark_line(report),
-        *analytics_lines(report)
+        *analytics_lines(report),
+        *comparison_lines(report)
       ]
     end
+
+    # П4 (docs/plans/P6/P4_сравнение.md): офлайн-сравнение вариантов
+    # (strategy+layers), только для чтения глазами -- в принятие решений не
+    # входит. Ключа `comparison` в отчёте нет, если конфиг его не задавал
+    # (Reporting::ReportBuilder.build без kwarg-а comparison).
+    def self.comparison_lines(report)
+      comparison = report['comparison']
+      return [] unless comparison
+
+      [
+        '',
+        'Сравнение (офлайн, не влияет на решения): вариант | доставлено | fallback | ' \
+        'ретраи | откл. от достижимого, п.п. | откл. от цели, п.п.',
+        *comparison_rows(comparison)
+      ]
+    end
+    private_class_method :comparison_lines
+
+    def self.comparison_rows(comparison)
+      baseline = comparison.fetch('baseline')
+      comparison.fetch('variants').map { |name, metrics| comparison_row(name, metrics, baseline) }
+    end
+    private_class_method :comparison_rows
+
+    def self.comparison_row(name, metrics, baseline)
+      label = name == baseline ? "#{name} (baseline)" : name
+      "  #{label}: #{metrics['delivered']} | #{metrics['fallback_used']} | " \
+        "#{metrics['retried']} | #{metrics['max_deviation_pp']} | " \
+        "#{metrics['max_deviation_from_target_pp']}"
+    end
+    private_class_method :comparison_row
 
     def self.distribution_lines(report)
       report.fetch('distribution').map { |name, entry| distribution_line(name, entry) }

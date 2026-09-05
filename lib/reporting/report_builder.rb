@@ -31,17 +31,25 @@ module Reporting
   module ReportBuilder
     FALLBACK_PROVIDER = 'spacepayments'
 
-    def self.build(pairs, providers:, history: {}, strategy: nil, benchmark: nil)
+    # comparison: секция П4 (docs/plans/P6/P4_сравнение.md), приходит готовым
+    # хешем из Offline::Comparison.build, как benchmark -- внутри build ничего
+    # не гоняет. nil (дефолт) -- ключа `comparison` в отчёте нет вовсе, не
+    # null-заглушка: старые вызовы без этого kwarg-а получают отчёт прежней формы.
+    # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
+    def self.build(pairs, providers:, history: {}, strategy: nil, benchmark: nil, comparison: nil)
       operations = pairs.map(&:first)
       outcomes = pairs.map(&:last)
 
-      header(operations, strategy).merge(sections(pairs, outcomes, providers, history, benchmark))
+      report = header(operations, strategy)
+               .merge(sections(pairs, outcomes, providers, history, benchmark))
+      comparison.nil? ? report : report.merge('comparison' => comparison)
     end
 
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
-    def self.write(path, pairs, providers:, history: {}, strategy: nil, benchmark: nil)
+    def self.write(path, pairs, providers:, history: {}, strategy: nil, benchmark: nil,
+                   comparison: nil)
       report = build(pairs, providers: providers, history: history, strategy: strategy,
-                            benchmark: benchmark)
+                            benchmark: benchmark, comparison: comparison)
       File.write(path, "#{JSON.pretty_generate(report)}\n")
     end
 

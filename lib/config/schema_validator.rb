@@ -12,7 +12,7 @@ module Config
     # добавить сюда одной строкой. Без этого валидатор отвергнет его как опечатку.
     KNOWN_TOP_LEVEL_KEYS = %w[
       strategy layers goals strategy_selection outcomes
-      amount_ranges obligations rate_limits fallback_provider
+      amount_ranges obligations rate_limits fallback_provider cascade comparison
     ].freeze
 
     def self.validate!(raw)
@@ -53,6 +53,13 @@ module Config
       SchemaRules.validate_amount_ranges!(raw['amount_ranges'])
       SchemaRules.validate_obligations!(raw['obligations'])
       SchemaRules.validate_rate_limits!(raw['rate_limits'])
+      SchemaRules.validate_cascade!(raw['cascade'])
+      SchemaRules.validate_comparison!(raw['comparison'], strategy: raw['strategy'],
+                                                          layers: raw['layers'] || [])
+      validate_hashes!(raw)
+    end
+
+    def self.validate_hashes!(raw)
       validate_hash!(raw['goals'], 'goals')
       validate_hash!(raw['strategy_selection'], 'strategy_selection')
       validate_hash!(raw['outcomes'], 'outcomes')
@@ -65,6 +72,6 @@ module Config
     end
 
     private_class_method :validate_root!, :validate_known_keys!, :validate_required!,
-                         :require_string!, :validate_types!, :validate_hash!
+                         :require_string!, :validate_types!, :validate_hashes!, :validate_hash!
   end
 end
