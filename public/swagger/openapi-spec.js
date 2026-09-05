@@ -35,6 +35,34 @@ window.OPENAPI_SPEC = {
   ],
   "paths": {
     "/snapshot": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "summary": "Отдать текущий загруженный снапшот",
+        "description": "Возвращает снапшот в том виде, в котором он был последний раз загружен\nчерез `POST /snapshot` или `POST /bootstrap`. Провайдеры отдаются\n**как в исходной загрузке**, без учёта in-memory мутаций счётчиков\n(`in_progress_*`, `daily_approved_amount`) — актуальные счётчики\nсмотри в `GET /state`.\n",
+        "operationId": "getSnapshot",
+        "responses": {
+          "200": {
+            "description": "Текущий снапшот",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SnapshotRequest"
+                },
+                "examples": {
+                  "default": {
+                    "$ref": "#/components/examples/SnapshotRequestExample"
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "$ref": "#/components/responses/NoSnapshot"
+          }
+        }
+      },
       "post": {
         "tags": [
           "Context"
@@ -82,6 +110,41 @@ window.OPENAPI_SPEC = {
       }
     },
     "/config": {
+      "get": {
+        "tags": [
+          "Context"
+        ],
+        "summary": "Отдать текущий активный конфиг",
+        "description": "Возвращает конфиг роутинга, применённый в данный момент. При старте\nсервиса это содержимое `config/routing.yml`, после `POST /config` или\n`POST /bootstrap` — то, что было передано в теле запроса. Всегда 200:\nконфиг гарантированно загружен на старте.\n",
+        "operationId": "getConfig",
+        "responses": {
+          "200": {
+            "description": "Текущий конфиг",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Config"
+                },
+                "examples": {
+                  "default": {
+                    "summary": "Дефолт из config/routing.yml",
+                    "value": {
+                      "strategy": "count_share",
+                      "layers": [],
+                      "outcomes": {
+                        "source": "deterministic",
+                        "seed": 42,
+                        "calibrate_from_history": true
+                      },
+                      "fallback_provider": "spacepayments"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
       "post": {
         "tags": [
           "Context"
