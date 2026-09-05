@@ -4,6 +4,44 @@ require 'json'
 require_relative '../domain/operation'
 
 module Io
+  # IO-2a: валидация и сборка одной сырой записи очереди — общий код между
+  # QueueLoader (весь файл в памяти) и QueueStreamLoader (построчно, для
+  # :jsonl-уровней синтетического бенчмарка, lib/synthetic). Дедупликация
+  # operation_id сюда не входит: она требует памяти на все увиденные id и
+  # инкапсулирована в каждом загрузчике отдельно (см. QueueStreamLoader).
+  module QueueRecord
+    REQUIRED_FIELDS = %w[operation_id created_at amount bank payout_requisite].freeze
+
+    module_function
+
+    def rejection_reason(raw)
+      missing = REQUIRED_FIELDS.reject { |field| raw[field] }
+      return "нет обязательного поля #{missing.join(', ')}" if missing.any?
+      return amount_error(raw['amount']) unless valid_amount?(raw['amount'])
+
+      nil
+    end
+
+    def amount_error(amount)
+      "amount должен быть положительным целым числом, получено #{amount.inspect}"
+    end
+
+    def valid_amount?(amount)
+      amount.is_a?(Integer) && amount.positive?
+    end
+
+    def build(raw)
+      Domain::Operation.new(
+        operation_id: raw.fetch('operation_id'),
+        created_at: raw.fetch('created_at'),
+        amount: raw.fetch('amount'),
+        bank: raw.fetch('bank'),
+        card_brand: raw['card_brand'],
+        payout_requisite: raw.fetch('payout_requisite')
+      )
+    end
+  end
+
   # IO-2: загрузчик очереди операций + валидация полей.
   #
   # Битая запись (нет обязательного поля, amount не целое положительное
@@ -11,8 +49,6 @@ module Io
   # тоже в errors, сохраняется первое вхождение (см. ARCHITECTURE.md §16).
   module QueueLoader
     Result = Data.define(:operations, :errors)
-
-    REQUIRED_FIELDS = %w[operation_id created_at amount bank payout_requisite].freeze
 
     def self.load(path)
       Builder.new(parse(path)).call
@@ -45,43 +81,16 @@ module Io
       private
 
       def process(raw, index)
-        reason = rejection_reason(raw)
+        reason = QueueRecord.rejection_reason(raw)
         return @errors << "operation[#{index}]: #{reason}" if reason
         return @errors << duplicate_message(raw, index) if @seen_ids[raw['operation_id']]
 
         @seen_ids[raw['operation_id']] = true
-        @operations << build_operation(raw)
+        @operations << QueueRecord.build(raw)
       end
 
       def duplicate_message(raw, index)
         "operation[#{index}]: дубль operation_id #{raw['operation_id']}, оставлено первое решение"
-      end
-
-      def rejection_reason(raw)
-        missing = REQUIRED_FIELDS.reject { |field| raw[field] }
-        return "нет обязательного поля #{missing.join(', ')}" if missing.any?
-        return amount_error(raw['amount']) unless valid_amount?(raw['amount'])
-
-        nil
-      end
-
-      def amount_error(amount)
-        "amount должен быть положительным целым числом, получено #{amount.inspect}"
-      end
-
-      def valid_amount?(amount)
-        amount.is_a?(Integer) && amount.positive?
-      end
-
-      def build_operation(raw)
-        Domain::Operation.new(
-          operation_id: raw.fetch('operation_id'),
-          created_at: raw.fetch('created_at'),
-          amount: raw.fetch('amount'),
-          bank: raw.fetch('bank'),
-          card_brand: raw['card_brand'],
-          payout_requisite: raw.fetch('payout_requisite')
-        )
       end
     end
   end

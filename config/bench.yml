@@ -1,0 +1,18 @@
+# Конфиг для bin/gen / bin/bench (make gen, make bench). Не боевой.
+#
+# calibrate_from_history: false обязателен — reference/data/operations_history.csv
+# знает только vipay/payflow/quickpay/spacepayments, а сгенерённые провайдеры
+# называются p001, p002... С калибровкой outcome_conversions.fetch(provider.name)
+# упал бы KeyError на первой же операции (bin/route:154, deterministic.rb:36).
+# Без калибровки конверсии берутся из providers.json (conversion_24h) — это
+# генератор и так знает, поэтому ожидаемый выход (expectation.json) остаётся
+# верным для любого числа сгенерённых провайдеров.
+strategy: count_share
+layers: []
+
+outcomes:
+  source: deterministic
+  seed: 42
+  calibrate_from_history: false
+
+fallback_provider: spacepayments

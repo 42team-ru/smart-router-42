@@ -1,0 +1,92 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Генератор входных данных с конструктивным оракулом.
+#
+# Использование:
+#   bin/gen --level LEVEL [--seed SEED] [--out-dir DIR]
+#
+# Пишет в out-dir (по умолчанию tmp/bench/<level>): providers.json,
+# queue.json|queue.jsonl (формат зависит от уровня, см. Synthetic::Levels),
+# expectation.json — точный и допустимый оракул для lib/bench/comparator.rb.
+#
+# Живёт вне lib/routing, lib/execution, lib/offline: scripts/check_determinism.sh
+# греплет только эти три каталога на rand/shuffle/sample/Time.now, а
+# Synthetic::Queue пользуется Time.new (не Time.now) для меток created_at —
+# это не источник недетерминизма, время не текущее, а вычисленное от seed и
+# индекса операции.
+
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+
+require 'optparse'
+require_relative '../lib/synthetic/levels'
+require_relative '../lib/synthetic/writer'
+
+def usage
+  "Использование: bin/gen --level LEVEL [--seed SEED] [--out-dir DIR]\n" \
+    "Уровни: #{Synthetic::Levels.known.join(', ')}"
+end
+
+def fail_with(message)
+  warn message
+  exit 1
+end
+
+def build_option_parser(options)
+  OptionParser.new do |opts|
+    opts.banner = usage
+    opts.on('--level LEVEL', 'Имя уровня нагрузки') { |v| options[:level] = v }
+    opts.on('--seed SEED', 'Seed генератора (по умолчанию 42)') { |v| options[:seed] = v }
+    opts.on('--out-dir DIR', 'Каталог для файлов (по умолчанию tmp/bench/<level>)') do |v|
+      options[:out_dir] = v
+    end
+  end
+end
+
+def parse_args(argv)
+  options = { seed: '42', out_dir: nil }
+  build_option_parser(options).parse!(argv)
+  fail_with("Не указан --level.\n#{usage}") unless options[:level]
+
+  options
+rescue OptionParser::ParseError => e
+  fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
+end
+
+def report_roles(bundle)
+  ps = bundle.provider_set
+  puts "Провайдеров: #{bundle.level.providers} " \
+       "(exclusive=#{ps.exclusive.size}, wide=#{ps.wide.size}, poisoned=#{ps.poisoned.size})"
+  puts "Якорей на exclusive-провайдера: #{ps.anchors_per_exclusive}, " \
+       "fallback-якорей: #{ps.fallback_anchor_count}"
+end
+
+def validate_level!(name)
+  return if Synthetic::Levels.known.include?(name)
+
+  fail_with("Неизвестный уровень #{name.inspect}; допустимы: #{Synthetic::Levels.known.join(', ')}")
+end
+
+def report_result(result)
+  report_roles(result[:bundle])
+  puts "Операций: #{result[:bundle].level.operations}, профиль: #{result[:bundle].profile.name}"
+  puts "Записано: #{result[:providers_path]}"
+  puts "Записано: #{result[:queue_path]}"
+  puts "Записано: #{result[:expectation_path]}"
+end
+
+def main(argv)
+  options = parse_args(argv)
+  validate_level!(options[:level])
+
+  out_dir = options[:out_dir] || File.join('tmp', 'bench', options[:level])
+  started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+  result = Synthetic::Writer.write(level_name: options[:level], seed: options[:seed],
+                                   out_dir: out_dir)
+  elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+
+  report_result(result)
+  puts "Время генерации: #{elapsed.round(2)} с"
+end
+
+main(ARGV) if $PROGRAM_NAME == __FILE__
