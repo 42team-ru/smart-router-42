@@ -23,6 +23,9 @@ require_relative '../lib/bench/measurement'
 
 DEFAULT_CONFIG = File.expand_path('../config/bench.yml', __dir__)
 
+# Выше этого числа операций эталон сам не включается: память растёт линейно по
+# длине очереди, а на 100 000 это уже гигабайт.
+ORACLE_AUTO_MAX_OPS = 10_000
 TOP_PROVIDERS = 10
 TOP_SKIP_REASONS = 5
 
@@ -39,6 +42,13 @@ end
 def add_options(opts, options)
   opts.on('--level LEVEL', 'Имя уровня нагрузки') { |v| options[:level] = v }
   opts.on('--seed SEED', 'Seed (по умолчанию 42)') { |v| options[:seed] = v }
+  add_path_options(opts, options)
+  opts.on('--[no-]oracle', 'Считать офлайн-эталон (competitive_ratio)') do |v|
+    options[:oracle] = v
+  end
+end
+
+def add_path_options(opts, options)
   opts.on('--dir DIR', 'Каталог со входом (по умолчанию tmp/bench/<level>)') do |v|
     options[:dir] = v
   end
@@ -84,7 +94,7 @@ end
 
 def print_report(result, level)
   print_header(result, level)
-  print_oracle_note(level)
+  print_oracle_note(level, !result.benchmark.nil?)
   print_benchmark(result.benchmark)
   print_analytics(result.accumulator)
   print_verdict(result.report)
@@ -165,11 +175,16 @@ end
 
 # На потоковых уровнях оракула нет по построению: ему нужна вся очередь и все
 # назначения в памяти, а ради отказа от этого потоковый режим и сделан.
-def print_oracle_note(level)
-  return if level.run_oracle
+def print_oracle_note(level, enabled)
+  return if enabled
 
-  puts 'офлайн-эталон не считается: уровень потоковый, вся очередь в память не ' \
-       'загружается — проверяются конструктивные якоря из expectation.json'
+  reason = if level.run_oracle
+             "уровень крупный, эталон держал бы все #{level.operations} пар в памяти " \
+               '— включается флагом --oracle (make bench ... ORACLE=1)'
+           else
+             'уровень потоковый, вся очередь в память не загружается'
+           end
+  puts "офлайн-эталон не считается: #{reason}; проверяются конструктивные якоря"
 end
 
 def print_benchmark(benchmark)
@@ -192,13 +207,24 @@ def print_verdict(report)
   puts(report.ok ? 'ВЕРДИКТ: OK' : 'ВЕРДИКТ: ПРОВАЛ')
 end
 
+# Эталон держит все пары (операция, исход) в памяти — на уровне m это 1.1 ГБ
+# против 170 МБ у потокового прогона. Поэтому дорогие уровни считают его только
+# по явному флагу: скрытая плата памятью хуже лишней команды.
+# Уровень задаёт умолчание, --oracle/--no-oracle перекрывает его в обе стороны.
+def oracle_enabled?(options, level)
+  return options[:oracle] unless options[:oracle].nil?
+
+  level.run_oracle && level.operations <= ORACLE_AUTO_MAX_OPS
+end
+
 def build_runner(options, level)
   providers_path, queue_path, expectation_path = ensure_input(level, options[:dir_resolved],
                                                               options[:seed])
   expectation = JSON.parse(File.read(expectation_path))
   Bench::Runner.new(providers_path: providers_path, queue_path: queue_path,
                     config_path: options[:config], expectation: expectation,
-                    mode: level.mode, seed: options[:seed], run_oracle: level.run_oracle)
+                    mode: level.mode, seed: options[:seed],
+                    run_oracle: oracle_enabled?(options, level))
 end
 
 def run_level(options, level)

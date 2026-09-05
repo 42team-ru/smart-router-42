@@ -69,11 +69,17 @@ gen:
 # режиме, без записи decisions.json ни на одном уровне; полный CLI с записью
 # файлов — bundle exec bin/route на выходе `make gen` (см. bin/bench --help).
 # Сам генерит вход при первом запуске, если GEN_DIR ещё пуст.
+#
+# ORACLE=1 добавляет офлайн-эталон (competitive_ratio). На малых уровнях он
+# считается сам; на крупных требует держать все пары в памяти (на m это ~1.1 ГБ
+# против 170 МБ), поэтому включается явно.
 bench:
-	bundle exec ruby bin/bench --level $(LEVEL) --seed $(SEED) --dir $(GEN_DIR)
+	bundle exec ruby bin/bench --level $(LEVEL) --seed $(SEED) --dir $(GEN_DIR) $(ORACLE_FLAG)
 
 # Быстрый прогон малых уровней подряд — для ручной проверки после правок
 # в lib/synthetic или lib/bench, не входит в gate.
+ORACLE_FLAG = $(if $(ORACLE),--oracle,)
+
 bench-all:
 	@for lvl in smoke s m; do \
 		bundle exec ruby bin/bench --level $$lvl --seed $(SEED) || exit 1; \
