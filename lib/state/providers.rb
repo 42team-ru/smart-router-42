@@ -14,6 +14,13 @@ module State
   # Незакрытый резерв тихо ломает eligibility на седьмой заявке.
   # expired-резерв закрывает Execution::PendingResolver через #resolve_hold.
   #
+  # П2 (docs/plans/P6/P2_rate_limit.md): счётчик запросов в минуту
+  # (@minute_requests) растёт только в #reserve — по факту отправки запроса
+  # провайдеру, включая fallback-резерв. Единственное сознательное отступление
+  # от таблицы исходов выше: счётчик НЕ уменьшается ни в #rollback, ни в
+  # #hold, ни в #commit — интенсивность считает отправленные запросы, а не
+  # занятую ёмкость, поэтому отказ или таймаут не возвращают лимит.
+  #
   # Domain::Provider иммутабельный (Data.define) — State держит параллельную
   # таблицу мутируемых полей по имени провайдера. Публичные читалки берут
   # значения только из этой таблицы, не из исходных объектов.
@@ -46,6 +53,7 @@ module State
       @reservations = {}
       @held_reservations = {}
       @shares = Routing::ShareLedger.new
+      @minute_requests = Hash.new(0)
     end
 
     def reserve(provider, operation)
@@ -56,7 +64,16 @@ module State
       @state_by_name[name][:in_progress_count] += 1
       @state_by_name[name][:in_progress_amount] += operation.amount
       @reservations[key] = operation.amount
+      increment_minute_counter(name, operation)
       self
+    end
+
+    # Сколько запросов уже отправлено провайдеру в минуту. minute — строка
+    # вида "2026-07-30T09:05" (operation.created_at[0, 16]), её считает вызывающая
+    # сторона (Routing::Constraints::RateLimit.minute_key), а не системные часы --
+    # см. правило проекта про запрет Time.now в lib/routing.
+    def requests_in_minute(name, minute)
+      @minute_requests[[name, minute]]
     end
 
     def commit(provider, operation)
@@ -141,6 +158,11 @@ module State
       return unless @reservations.key?(key)
 
       raise ArgumentError, "reserve already held for (#{key.first}, #{name})"
+    end
+
+    def increment_minute_counter(name, operation)
+      minute = operation.created_at[0, 16]
+      @minute_requests[[name, minute]] += 1
     end
 
     def release_capacity(name, operation)

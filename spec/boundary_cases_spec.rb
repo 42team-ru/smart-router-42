@@ -184,5 +184,33 @@ RSpec.describe 'граничные случаи §16' do
         .to raise_error(ArgumentError, /ghost_provider/)
     end
   end
+
+  # Доп. (П2, docs/plans/P6/P2_rate_limit.md, риск «created_at без секунд/в
+  # другом формате»): срез created_at[0, 16] в RateLimit.minute_key и в
+  # State::Providers#reserve обязан не ронять прогон даже на нестандартной
+  # строке времени -- он просто отрезает сколько есть, без ArgumentError.
+  describe 'нестандартный created_at (короче 16 символов) → срез не роняет прогон' do
+    # rubocop:disable-next RSpec/ExampleLength, RSpec/MultipleExpectations
+    it 'Planner + Executor проходят операцию с обрезанным created_at без ошибок' do
+      vipay = build_provider('vipay', requests_per_minute_limit: 7, available_requisites: 5,
+                                      traffic_percentage: 40)
+      sp    = build_spacepayments
+
+      state    = State::Providers.new([vipay, sp])
+      planner  = Routing::Planner.new(providers: [vipay, sp])
+      executor = Execution::Executor.new(outcomes: Execution::OutcomeSource::AlwaysOk.new)
+      op       = build_operation(id: 'op_short_time', amount: 5_000, created_at: '2026-07-30')
+
+      plan = nil
+      outcome = nil
+      expect do
+        plan = planner.plan(op, state)
+        outcome = executor.run(plan, op, state)
+      end.not_to raise_error
+
+      expect(outcome.selected.name).to eq('vipay')
+      expect(state.requests_in_minute('vipay', '2026-07-30')).to eq(1)
+    end
+  end
 end
 # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength

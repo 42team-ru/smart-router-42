@@ -91,6 +91,70 @@ RSpec.describe State::Providers do
     end
   end
 
+  # П2 (docs/plans/P6/P2_rate_limit.md): счётчик интенсивности. Растёт только
+  # в #reserve (включая fallback-резерв — это тоже #reserve), и намеренно не
+  # уменьшается ни в #rollback, ни в #hold, ни в #commit, ни в #resolve_hold --
+  # интенсивность считает отправленные запросы, а не занятую ёмкость.
+  describe '#requests_in_minute' do
+    def minute = '2026-07-30T10:00'
+    def other_minute = '2026-07-30T10:01'
+    def op_a = build_operation(id: 'op_rl_a', amount: 5_000, created_at: '2026-07-30T10:00:05Z')
+    def op_b = build_operation(id: 'op_rl_b', amount: 5_000, created_at: '2026-07-30T10:00:59Z')
+    def op_c = build_operation(id: 'op_rl_c', amount: 5_000, created_at: '2026-07-30T10:01:00Z')
+
+    it 'нулевой счётчик до первого резерва' do
+      expect(state.requests_in_minute('vipay', minute)).to eq(0)
+    end
+
+    it 'растёт на каждый reserve в ту же минуту' do
+      state.reserve(vipay, op_a)
+      state.reserve(vipay, op_b)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(2)
+    end
+
+    it 'не уменьшается на rollback' do
+      state.reserve(vipay, op_a)
+      state.rollback(vipay, op_a)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(1)
+    end
+
+    it 'не уменьшается на commit' do
+      state.reserve(vipay, op_a)
+      state.commit(vipay, op_a)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(1)
+    end
+
+    it 'не уменьшается на hold ни на последующий resolve_hold' do
+      state.reserve(vipay, op_a)
+      state.hold(vipay, op_a)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(1)
+
+      state.resolve_hold(vipay, op_a, :approved)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(1)
+    end
+
+    it 'разные минуты не смешиваются' do
+      state.reserve(vipay, op_a)
+      state.reserve(vipay, op_c)
+
+      expect(state.requests_in_minute('vipay', minute)).to eq(1)
+      expect(state.requests_in_minute('vipay', other_minute)).to eq(1)
+    end
+
+    it 'новый экземпляр State::Providers начинает с нуля' do
+      state.reserve(vipay, op_a)
+
+      fresh = described_class.new([vipay, payflow, spacepayments])
+
+      expect(fresh.requests_in_minute('vipay', minute)).to eq(0)
+    end
+  end
+
   describe 'spacepayments с null-лимитами' do
     it 'reserve/commit/rollback/hold не райзят' do
       expect { state.reserve(spacepayments, operation) }.not_to raise_error

@@ -30,12 +30,20 @@ RSpec.describe Routing::Constraints do
     )
   end
 
-  it 'держит девять проверок в зафиксированном порядке' do
+  # П2 (docs/plans/P6/P2_rate_limit.md): RateLimit больше не в общем REGISTRY --
+  # он отдельный этап, который применяет только Routing::Planner (со смягчением
+  # Ф-4). Constraints.check/eligible? (этот REGISTRY) остаются восемью
+  # проверками, которые вели себя так и до пакета П2.
+  it 'держит восемь проверок в зафиксированном порядке' do
     expect(described_class::REGISTRY).to be_frozen
     expect(described_class::REGISTRY.map { |constraint| constraint.name.split('::').last }).to eq(
-      %w[Status TrafficShare AmountRange DailyLimit InProgress BankFilter Margin Requisites
-         RateLimit]
+      %w[Status TrafficShare AmountRange DailyLimit InProgress BankFilter Margin Requisites]
     )
+  end
+
+  it 'RateLimit существует отдельно от REGISTRY и не отсеивает без состояния' do
+    expect(described_class::RateLimit.violation(providers.first, operations.first, nil)).to be_nil
+    expect(described_class::REGISTRY).not_to include(described_class::RateLimit)
   end
 
   it 'содержит наследников Base с трёхаргументным violation' do
