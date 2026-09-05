@@ -1,0 +1,7 @@
+# Плюс потолок долей. Смысл не в улучшении count_share (он и так ведёт к целям),
+# а в страховке: смени стратегию на любую другую — потолок продолжит работать.
+strategy: count_share
+layers: [share_ceiling]
+goals:
+  share_ceiling: { tolerance_bp: 0 }
+fallback_provider: spacepayments

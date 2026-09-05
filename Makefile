@@ -90,9 +90,12 @@ ORACLE_FLAG = $(if $(ORACLE),--oracle,)
 #   make bench-configs CONFIGS="a.yml b.yml"     # конкретные файлы
 #   make bench-configs LEVEL=compare_m ORACLE=1  # добавить competitive_ratio
 CONFIGS ?=
+# LEVEL по умолчанию compare, а не smoke: сравнивать конфиги имеет смысл только
+# на профиле competitive. Значение из командной строки перекрывает дефолт,
+# значение из переменной Makefile (LEVEL ?= smoke, оно для make bench) — нет.
+CMP_LEVEL = $(if $(filter command line,$(origin LEVEL)),$(LEVEL),compare)
 bench-configs:
-	@LEVEL=$(if $(filter compare,$(LEVEL)),compare,$(or $(LEVEL),compare)) \
-	 SEED=$(SEED) $(if $(ORACLE),ORACLE=1,) \
+	@LEVEL=$(CMP_LEVEL) SEED=$(SEED) $(if $(ORACLE),ORACLE=1,) \
 	 bundle exec ruby scripts/bench_configs.rb $(CONFIGS)
 
 bench-all:

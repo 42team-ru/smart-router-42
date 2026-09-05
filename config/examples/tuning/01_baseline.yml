@@ -1,0 +1,6 @@
+# Отправная точка: голый аллокатор целевых долей, ничего сверху.
+# На профиле competitive уже даёт competitive_ratio 1.0 — остальные конфиги
+# сравниваются с этим.
+strategy: count_share
+layers: []
+fallback_provider: spacepayments

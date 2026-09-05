@@ -1,0 +1,7 @@
+# Плюс бережное отношение к дневному лимиту: провайдер, у которого потрачено
+# больше 90% бюджета, уступает очередь тем, у кого запас есть.
+strategy: count_share
+layers: [budget_headroom]
+goals:
+  budget_headroom: { activates_at_spent_pct: 90 }
+fallback_provider: spacepayments

@@ -1,0 +1,8 @@
+# Оба слоя. Порядок значим: потолок долей старше бюджета, поэтому превышение
+# квоты перевесит запас лимита. Обратный порядок — в 05.
+strategy: count_share
+layers: [share_ceiling, budget_headroom]
+goals:
+  share_ceiling: { tolerance_bp: 0 }
+  budget_headroom: { activates_at_spent_pct: 90 }
+fallback_provider: spacepayments

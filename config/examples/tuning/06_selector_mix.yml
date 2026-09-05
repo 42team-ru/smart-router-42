@@ -1,0 +1,17 @@
+# Разная логика для разных заявок: обычно держим доли, на крупных суммах важнее
+# довести деньги, а когда допустимый провайдер один — любая стратегия выродится
+# в него же, и дешевле взять самую простую.
+strategy: count_share
+layers: [share_ceiling]
+goals:
+  share_ceiling: { tolerance_bp: 0 }
+strategy_selection:
+  default: count_share
+  rules:
+    - when: { eligible_count_lte: 1 }
+      use: priority
+      why: "выбора нет, каскад тривиален"
+    - when: { amount_gte: 500000 }
+      use: conversion
+      why: "крупная сумма — приоритет проходимости"
+fallback_provider: spacepayments
