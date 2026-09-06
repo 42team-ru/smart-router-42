@@ -5,7 +5,8 @@
 #
 # Использование:
 #   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--config PATH]
-#             [--strategy NAME] [--outcomes NAME] [--seed SEED] [--script PATH]
+#             [--history PATH] [--strategy NAME] [--outcomes NAME] [--seed SEED]
+#             [--script PATH]
 #             [--[no-]offline-analytics]
 #
 # Источники исходов: deterministic (боевой, хеш от seed), scripted (исход каждой
@@ -94,11 +95,20 @@ def fail_with(message)
   exit 1
 end
 
-def add_routing_options(opts, options)
+# Пути входов отдельно от поведения: в час стопкода организаторы могут выдать
+# свой снапшот провайдеров и свою историю вместе с очередью, и все три подмены
+# обязаны делаться флагами, без правки боевого конфига (docs/RUNBOOK.md, шаг 2).
+def add_input_options(opts, options)
   opts.on('--providers PATH', 'Снапшот провайдеров') { |path| options[:providers_path] = path }
+  opts.on('--history PATH', 'История операций (по умолчанию history_path из конфига)') do |path|
+    options[:history_path] = path
+  end
   opts.on('--config PATH', 'Файл конфигурации (по умолчанию config/routing.yml)') do |path|
     options[:config_path] = path
   end
+end
+
+def add_routing_options(opts, options)
   opts.on('--strategy NAME',
           "Стратегия ранжирования: #{Routing::Strategies.known.join(', ')}") do |name|
     options[:strategy] = name
@@ -120,6 +130,7 @@ def add_options(opts, options)
   opts.on('--out-dir DIR', 'Каталог для выходных файлов (по умолчанию out)') do |dir|
     options[:out_dir] = dir
   end
+  add_input_options(opts, options)
   add_routing_options(opts, options)
   add_outcome_options(opts, options)
   opts.on('--[no-]offline-analytics',
@@ -149,7 +160,8 @@ def default_options
   # когда он реально передан (see offline_analytics_enabled? ниже); nil здесь
   # означает «решает порог из конфига», а не «выключено».
   { out_dir: 'out', providers_path: 'data/providers.json',
-    config_path: 'config/routing.yml', outcomes: nil, seed: nil, offline_analytics: nil }
+    config_path: 'config/routing.yml', outcomes: nil, seed: nil, offline_analytics: nil,
+    history_path: nil }
 end
 
 def parse_args(argv)
@@ -529,8 +541,10 @@ def load_inputs(options)
   providers = apply_overrides(raw_providers, config)
   # История читается один раз здесь и раздаётся всем, кому нужна: источнику
   # исходов (пороги конверсии), стратегии conversion (порядок кандидатов) и
-  # отчёту. Путь берётся из конфига, ключ history_path.
-  history = load_history(config.history_path, config)
+  # отчёту. Путь берётся из конфига (ключ history_path) либо из флага --history:
+  # в час стопкода организаторы могут выдать свою историю, и правка боевого
+  # конфига под дедлайном — худший момент для правки боевого конфига.
+  history = load_history(options[:history_path] || config.history_path, config)
   {
     providers: providers,
     operations: load_queue(options[:queue_path]),

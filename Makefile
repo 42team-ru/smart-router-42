@@ -41,9 +41,18 @@ validate:
 	bundle exec bin/route reference/data/operations_queue_10.json
 	ruby reference/scripts/validate_10.rb $(OUT)
 
-# Единственная команда часа стопкода: кладёт боевые имена файлов в корень репозитория.
+# Единственная команда часа стопкода: кладёт боевые имена файлов в корень
+# репозитория. Организаторы могут выдать вместе с очередью свой снапшот
+# провайдеров и свою историю — тогда подставляются PROVIDERS и HISTORY, и
+# боевой config/routing.yml править не приходится:
+#   make deliver QUEUE=operations_queue_test.json
+#   make deliver QUEUE=... PROVIDERS=их_providers.json
+#   make deliver QUEUE=... PROVIDERS=их_providers.json HISTORY=их_history.csv
+PROVIDERS ?=
+HISTORY ?=
+DELIVER_FLAGS = $(if $(PROVIDERS),--providers $(PROVIDERS),) $(if $(HISTORY),--history $(HISTORY),)
 deliver:
-	bundle exec bin/route $(QUEUE) --out-dir .
+	bundle exec bin/route $(QUEUE) $(DELIVER_FLAGS) --out-dir .
 
 # Два прогона обязаны совпасть побайтово. Невоспроизводимость убивает
 # главную цифру защиты, поэтому проверяется отдельной целью.

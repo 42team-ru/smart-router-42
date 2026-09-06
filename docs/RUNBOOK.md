@@ -154,12 +154,51 @@ ruby -rjson -e 'q=JSON.parse(File.read("reference/data/operations_queue_test.jso
 
 ### Шаг 2. Сгенерировать
 
+Организаторы могут выдать вместе с очередью свой снапшот провайдеров и свою
+историю. Команда одна, отличается только тем, что подставлено. **Боевой
+`config/routing.yml` не правится ни в одном из случаев** — на это есть флаги.
+
+**Случай 1: дали только платежи.**
+
 ```bash
-make deliver QUEUE=reference/data/operations_queue_test.json
+make deliver QUEUE=operations_queue_test.json
 ```
 
-Кладёт `routing_decisions_test.json` и `routing_report_test.json` **в корень**
-репозитория, перезаписывая репетиционные.
+Берётся наш `data/providers.json` и наша история. Обычный сценарий.
+
+**Случай 2: дали провайдеров и платежи.**
+
+```bash
+make deliver QUEUE=operations_queue_test.json PROVIDERS=providers.json
+```
+
+Их снапшот — состояние на момент симуляции, значит считать надо по нему.
+Проверено на пристинном `reference/data/providers.json`: распределение и
+валидатор те же, 29/29.
+
+Одно отличие увидишь в отчёте: в их файле нет четырёх полей, которые ТЗ
+разрешает завести самим (`volume_share_pct`, `requests_per_minute_limit`,
+`daily_turnover_min/max`). Поэтому `volume_distribution.target_pct` падает на
+`traffic_percentage` — 40/35/25 вместо наших 50/30/20. Это штатный фолбэк, он
+описан в `Achievable.volume_weight_bp`, а не поломка. На очереди в десяток
+заявок интенсивность и обязательства всё равно не срабатывают.
+
+**Случай 3: дали историю, провайдеров и платежи.**
+
+```bash
+make deliver QUEUE=operations_queue_test.json \
+             PROVIDERS=providers.json \
+             HISTORY=operations_history.csv
+```
+
+История под боевым `always_ok` на исходы не влияет (одобряется всё), но кормит
+рекомендации отчёта и стратегию `conversion`. Флаг `--history` заведён именно
+под этот час: до него путь брался только из ключа `history_path`, то есть
+подмена требовала правки боевого конфига под дедлайном.
+
+Любая из трёх команд кладёт `routing_decisions_test.json` и
+`routing_report_test.json` **в корень** репозитория, перезаписывая
+репетиционные.
 
 Если очередь очень большая и прогон затягивается — раздел 7.
 
@@ -425,4 +464,7 @@ make validate      # валидатор организаторов (только
 make determinism   # два прогона обязаны совпасть побайтово
 make deliver QUEUE=<файл>   # боевые имена файлов в корень репозитория
 make route  QUEUE=<файл>    # то же, но в out/ — для примерок
+
+# Если организаторы дали свой снапшот и/или свою историю (шаг 2):
+make deliver QUEUE=<очередь> PROVIDERS=<providers.json> HISTORY=<history.csv>
 ```
