@@ -61,6 +61,7 @@ require_relative '../lib/reporting/latency_profile'
 require_relative '../lib/reporting/queue_coverage'
 require_relative '../lib/reporting/input_diagnostics'
 require_relative '../lib/reporting/amount_bands'
+require_relative '../lib/reporting/recommendation_effect'
 require_relative '../lib/offline/objective'
 require_relative '../lib/offline/oracle'
 require_relative '../lib/offline/benchmark_block'
@@ -118,6 +119,9 @@ def add_routing_options(opts, options)
           "Стратегия ранжирования: #{Routing::Strategies.known.join(', ')}") do |name|
     options[:strategy] = name
   end
+  opts.on('--set KEY=VALUE', 'Временно переопределить существующую настройку') do |expression|
+    options[:overrides] << expression
+  end
 end
 
 def add_outcome_options(opts, options)
@@ -166,7 +170,7 @@ def default_options
   # означает «решает порог из конфига», а не «выключено».
   { out_dir: 'out', providers_path: 'data/providers.json',
     config_path: 'config/routing.yml', outcomes: nil, seed: nil, offline_analytics: nil,
-    history_path: nil }
+    history_path: nil, overrides: [] }
 end
 
 def parse_args(argv)
@@ -193,8 +197,10 @@ end
 # предупреждение не печатается; на пристинном reference/data/providers.json
 # печатается по-прежнему).
 def apply_overrides(providers, config)
+  extra = config.providers_extra_path ? Io::ProviderOverrides.load_extra(config.providers_extra_path) : {}
   Io::ProviderOverrides.apply(providers, obligations: config.obligations,
-                                         rate_limits: config.rate_limits)
+                                         rate_limits: config.rate_limits,
+                                         providers_overrides: extra.merge(config.providers))
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -492,8 +498,8 @@ end
 
 # Config::SchemaError наследует RuntimeError: битый или отсутствующий конфиг
 # должен давать сообщение и код 1, а не трейс.
-def load_config(path)
-  Config::Loader.load(path)
+def load_config(path, overrides = [])
+  Config::Loader.load(path, overrides: overrides)
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -539,8 +545,9 @@ def warn_missing_provider_field(rules, providers, field, key, snapshot_field)
 end
 
 # rubocop:disable-next Metrics/MethodLength -- загрузка входов и предупреждения делаются единожды до цикла очереди.
+# rubocop:disable-next Metrics/AbcSize
 def load_inputs(options)
-  config = load_config(options[:config_path])
+  config = load_config(options[:config_path], options[:overrides])
   raw_providers = load_providers(options[:providers_path])
   warn_unapplied_config(config, raw_providers)
   providers = apply_overrides(raw_providers, config)
@@ -573,7 +580,11 @@ def build_report_sections(pairs, inputs, history_path)
     'queue_coverage' => Reporting::QueueCoverage.build(inputs[:queue], pairs),
     'input_diagnostics' => Reporting::InputDiagnostics.build(inputs[:queue], inputs[:history],
                                                              inputs[:providers]),
-    'amount_bands' => Reporting::AmountBands.build(pairs, inputs[:history])
+    'amount_bands' => Reporting::AmountBands.build(pairs, inputs[:history]),
+    'recommendation_effect' => Reporting::RecommendationEffect.build(
+      pairs, operations: inputs[:operations], providers: inputs[:providers],
+      config: inputs[:config], history: inputs[:history]
+    )
   }
   latency = Reporting::LatencyProfile.build(inputs[:history], source)
   latency.nil? ? sections : sections.merge('latency_profile' => latency)

@@ -54,12 +54,13 @@ module Io
     # обозначением приора Дирихле по всему пакету (HistoryLoader, Conversion,
     # Recommendations); переименование ради линтера рассинхронизировало бы
     # код с комментариями и контрольными числами брифа.
-    def initialize(entries:, k:, smoothed:, rows: [], diagnostics: {})
+    def initialize(entries:, k:, smoothed:, rows: [], diagnostics: {}, bank_entries: {})
       @entries = entries
       @k = k
       @smoothed = smoothed
       @rows = rows
       @diagnostics = diagnostics
+      @bank_entries = bank_entries
     end
 
     def smoothed? = @smoothed
@@ -77,6 +78,14 @@ module Io
     def expired_count(name) = entry(name).expired_count
 
     def approved_bp(name) = entry(name).approved_bp
+
+    # Второй уровень: банк тянется к уже калиброванному провайдеру, а не к
+    # глобальной средней. Неизвестная пара честно возвращает provider-level.
+    def approved_bp_for(name, bank)
+      @bank_entries.fetch([name, bank], entry(name)).approved_bp
+    end
+
+    def observations_for(name, bank) = @bank_entries.fetch([name, bank], Entry.new(n: 0)).n
 
     def rejected_bp(name) = entry(name).rejected_bp
 

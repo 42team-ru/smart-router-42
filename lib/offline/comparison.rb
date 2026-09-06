@@ -47,6 +47,14 @@ module Offline
       { 'baseline' => baseline, 'variants' => variant_metrics, 'note' => NOTE }
     end
 
+    # Один изолированный контрфактуальный прогон. Используется аналитикой
+    # рекомендаций: новый State::Providers не может изменить боевой результат.
+    def self.evaluate(operations:, providers:, config:, history:)
+      achievable = achievable_for(operations, providers)
+      variant = { 'strategy' => config.strategy, 'layers' => config.layers }
+      metrics_for(variant, operations, providers, config, history, achievable)
+    end
+
     def self.achievable_for(operations, providers)
       eligibility = eligibility_for(operations, providers)
       Routing::Achievable.for_queue(operations: operations, providers: providers,

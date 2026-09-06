@@ -1,23 +1,6 @@
 [
   {
-    "operation_id": "op_101",
-    "selected_provider": "vipay",
-    "attempts": [
-      {
-        "provider": "vipay",
-        "decision": "selected",
-        "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/1=4000 против payflow 3500/1=3500",
-        "strategy": "count_share",
-        "attempt_no": 1,
-        "result": "approved"
-      }
-    ],
-    "simulated_result": "approved",
-    "latency_sec": 38
-  },
-  {
-    "operation_id": "op_102",
+    "operation_id": "op_111",
     "selected_provider": "payflow",
     "attempts": [
       {
@@ -40,36 +23,30 @@
     "latency_sec": 52
   },
   {
-    "operation_id": "op_103",
-    "selected_provider": "quickpay",
+    "operation_id": "op_112",
+    "selected_provider": "vipay",
     "attempts": [
-      {
-        "provider": "vipay",
-        "decision": "skipped",
-        "reason": "amount_exceeds_limit",
-        "details": "150000 > limit_amount_max 100000"
-      },
       {
         "provider": "payflow",
         "decision": "skipped",
-        "reason": "amount_exceeds_limit",
-        "details": "150000 > limit_amount_max 50000"
+        "reason": "bank_not_in_list",
+        "details": "bank vtb не входит в banks [sberbank, alfa] (2 банка)"
       },
       {
-        "provider": "quickpay",
+        "provider": "vipay",
         "decision": "selected",
-        "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/1=2500, других допустимых нет",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/1=4000 против quickpay 2500/1=2500",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
       }
     ],
     "simulated_result": "approved",
-    "latency_sec": 29
+    "latency_sec": 38
   },
   {
-    "operation_id": "op_104",
+    "operation_id": "op_113",
     "selected_provider": "quickpay",
     "attempts": [
       {
@@ -88,7 +65,7 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/3=833, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/1=2500, других допустимых нет",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -98,20 +75,20 @@
     "latency_sec": 29
   },
   {
-    "operation_id": "op_105",
+    "operation_id": "op_114",
     "selected_provider": "vipay",
     "attempts": [
       {
         "provider": "payflow",
         "decision": "skipped",
-        "reason": "bank_not_in_list",
-        "details": "bank tinkoff не входит в banks [sberbank, alfa] (2 банка)"
+        "reason": "amount_exceeds_limit",
+        "details": "75000 > limit_amount_max 50000"
       },
       {
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/3=1333 против quickpay 2500/5=500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/3=1333 против quickpay 2500/3=833",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -121,8 +98,8 @@
     "latency_sec": 38
   },
   {
-    "operation_id": "op_106",
-    "selected_provider": "vipay",
+    "operation_id": "op_115",
+    "selected_provider": "quickpay",
     "attempts": [
       {
         "provider": "payflow",
@@ -131,10 +108,62 @@
         "details": "52000 > limit_amount_max 50000"
       },
       {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/3=833 против vipay 4000/5=800",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_116",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/5=500, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_117",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank vtb не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/5=800 против quickpay 2500/5=500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/5=800 против quickpay 2500/7=357",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -144,20 +173,49 @@
     "latency_sec": 38
   },
   {
-    "operation_id": "op_107",
+    "operation_id": "op_118",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "80000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/7=357, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_119",
     "selected_provider": "payflow",
     "attempts": [
       {
         "provider": "vipay",
         "decision": "skipped",
         "reason": "amount_below_minimum",
-        "details": "800 < limit_amount_min 1000"
+        "details": "900 < limit_amount_min 1000"
       },
       {
         "provider": "quickpay",
         "decision": "skipped",
         "reason": "amount_below_minimum",
-        "details": "800 < limit_amount_min 1000"
+        "details": "900 < limit_amount_min 1000"
       },
       {
         "provider": "payflow",
@@ -173,7 +231,174 @@
     "latency_sec": 52
   },
   {
-    "operation_id": "op_108",
+    "operation_id": "op_120",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/9=277, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_121",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "75000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/7=571 против quickpay 2500/11=227",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_122",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank tinkoff не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/9=444 против quickpay 2500/11=227",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_123",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "80000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/11=227, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_124",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/5=700 против vipay 4000/11=363",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_125",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank vtb не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/11=363 против quickpay 2500/13=192",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_126",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/7=500 против quickpay 2500/13=192",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_127",
     "selected_provider": "quickpay",
     "attempts": [
       {
@@ -192,7 +417,7 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/5=500, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/13=192, других допустимых нет",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -202,7 +427,123 @@
     "latency_sec": 29
   },
   {
-    "operation_id": "op_109",
+    "operation_id": "op_128",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/15=166, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_129",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "52000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/17=147, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_130",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "95000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/19=131, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_131",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/21=119, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_132",
     "selected_provider": "vipay",
     "attempts": [
       {
@@ -215,7 +556,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/7=571 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/13=307 против quickpay 2500/23=108",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -225,7 +566,198 @@
     "latency_sec": 38
   },
   {
-    "operation_id": "op_110",
+    "operation_id": "op_133",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/23=108, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_134",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank tinkoff не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/15=266 против quickpay 2500/25=100",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_135",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "800 < limit_amount_min 1000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "800 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/9=388, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_136",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank tinkoff не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/17=235 против quickpay 2500/25=100",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_137",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/25=100, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_138",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/27=92, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_139",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/11=318, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_140",
     "selected_provider": "payflow",
     "attempts": [
       {
@@ -238,7 +770,7 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/5=700 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/13=269 против quickpay 2500/29=86",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -246,5 +778,1639 @@
     ],
     "simulated_result": "approved",
     "latency_sec": 52
+  },
+  {
+    "operation_id": "op_141",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/15=233 против quickpay 2500/29=86",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_142",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 10000 = 3008600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/19=210 против quickpay 2500/29=86",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_143",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 35000 = 3033600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/21=190 против quickpay 2500/29=86",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_144",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 2000 = 3000600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/23=173 против quickpay 2500/29=86",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_145",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 10000 = 3008600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/29=86, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_146",
+    "selected_provider": "spacepayments",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, alfa] (2 банка)"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "spacepayments",
+        "decision": "selected",
+        "reason": "fallback_no_eligible_provider",
+        "details": "допустимых внешних провайдеров 0 из 3",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 15
+  },
+  {
+    "operation_id": "op_147",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 5000 = 3003600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/31=80, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_148",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 15000 = 3013600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/33=75, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_149",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "80000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/35=71, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_150",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 42000 = 3040600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/37=67, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_151",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 25000 = 3023600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/25=160 против quickpay 2500/39=64",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_152",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 15000 = 3013600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/39=64, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_153",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 2000 = 3000600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/41=60, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_154",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 42000 = 3040600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/43=58, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_155",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "95000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/45=55, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_156",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/47=53, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_157",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 10000 = 3008600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/49=51, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_158",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 42000 = 3040600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/51=49, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_159",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 48000 = 3046600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/53=47, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_160",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/55=45, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_161",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "150000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/57=43, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_162",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 30000 = 3028600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/27=148 против quickpay 2500/59=42",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_163",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2998600 + 40000 = 3038600 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/59=42, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_164",
+    "selected_provider": "payflow",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "800 < limit_amount_min 1000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "800 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/17=205, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 52
+  },
+  {
+    "operation_id": "op_165",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 3000 = 3002400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/61=40, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_166",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/63=39, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_167",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 25000 = 3024400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/29=137 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_168",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "52000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/31=129 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_169",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 10000 = 3009400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/33=121 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_170",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 1500 = 3000900 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/35=114 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_171",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 3000 = 3002400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/37=108 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_172",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 8000 = 3007400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/39=102 против quickpay 2500/65=38",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_173",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 12000 = 3011400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/65=38, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_174",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 8000 = 3007400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/41=97 против quickpay 2500/67=37",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_175",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 10000 = 3009400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/67=37, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_176",
+    "selected_provider": "spacepayments",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 900 = 3000300 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "spacepayments",
+        "decision": "selected",
+        "reason": "fallback_no_eligible_provider",
+        "details": "допустимых внешних провайдеров 0 из 3",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 15
+  },
+  {
+    "operation_id": "op_177",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 42000 = 3041400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/69=36, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_178",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "120000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/71=35, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_179",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 1500 = 3000900 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/73=34, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_180",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 100000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "180000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/75=33, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_181",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 1500 = 3000900 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/43=93 против quickpay 2500/77=32",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_182",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 1500 = 3000900 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/77=32, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_183",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 40000 = 3039400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/79=31, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_184",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 1500 = 3000900 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/45=88 против quickpay 2500/81=30",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_185",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 3000 = 3002400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/47=85 против quickpay 2500/81=30",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_186",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "95000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/81=30, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_187",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 8000 = 3007400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/49=81 против quickpay 2500/83=30",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_188",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 12000 = 3011400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/51=78 против quickpay 2500/83=30",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_189",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 15000 = 3014400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/83=30, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_190",
+    "selected_provider": "spacepayments",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 900 = 3000300 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "spacepayments",
+        "decision": "selected",
+        "reason": "fallback_no_eligible_provider",
+        "details": "допустимых внешних провайдеров 0 из 3",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 15
+  },
+  {
+    "operation_id": "op_191",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 8000 = 3007400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/53=75 против quickpay 2500/85=29",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_192",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "55000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/85=29, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_193",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 2000 = 3001400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/87=28, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_194",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 3000 = 3002400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/89=28, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_195",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 40000 = 3039400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/55=72 против quickpay 2500/91=27",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_196",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank gazprombank не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 2000 = 3001400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/91=27, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_197",
+    "selected_provider": "vipay",
+    "attempts": [
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 8000 = 3007400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "vipay",
+        "decision": "selected",
+        "reason": "best_target_adherence",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/57=70 против quickpay 2500/93=26",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 38
+  },
+  {
+    "operation_id": "op_198",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "amount_exceeds_limit",
+        "details": "52000 > limit_amount_max 50000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/93=26, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
+  },
+  {
+    "operation_id": "op_199",
+    "selected_provider": "spacepayments",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 900 = 3000300 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "skipped",
+        "reason": "amount_below_minimum",
+        "details": "900 < limit_amount_min 1000"
+      },
+      {
+        "provider": "spacepayments",
+        "decision": "selected",
+        "reason": "fallback_no_eligible_provider",
+        "details": "допустимых внешних провайдеров 0 из 3",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 15
+  },
+  {
+    "operation_id": "op_200",
+    "selected_provider": "quickpay",
+    "attempts": [
+      {
+        "provider": "vipay",
+        "decision": "skipped",
+        "reason": "bank_not_in_list",
+        "details": "bank raiffeisen не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
+      },
+      {
+        "provider": "payflow",
+        "decision": "skipped",
+        "reason": "daily_limit_exceeded",
+        "details": "daily_approved_amount 2999400 + 30000 = 3029400 > daily_amount_limit 3000000"
+      },
+      {
+        "provider": "quickpay",
+        "decision": "selected",
+        "reason": "only_eligible_provider",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/95=26, других допустимых нет",
+        "strategy": "count_share",
+        "attempt_no": 1,
+        "result": "approved"
+      }
+    ],
+    "simulated_result": "approved",
+    "latency_sec": 29
   }
 ]

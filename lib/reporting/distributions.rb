@@ -34,6 +34,15 @@ module Reporting
               .each_with_object(Hash.new(0)) { |attempt, tally| tally[attempt.reason] += 1 }
     end
 
+    # Та же статистика, но с адресатом: плоское «bank_not_in_list: 8» не
+    # отвечает, какого именно провайдера и почему исключили.
+    def self.skip_reasons_by_provider(outcomes)
+      skipped_attempts(outcomes).each_with_object({}) do |attempt, result|
+        result[attempt.provider] ||= Hash.new(0)
+        result[attempt.provider][attempt.reason] += 1
+      end.transform_values(&:dup)
+    end
+
     def self.final_entry(pairs, provider, weight, total, achievable)
       part = weight_of(pairs, provider, weight)
       share_pct = percentage(part, total)
@@ -98,6 +107,11 @@ module Reporting
       outcomes.flat_map(&:attempts).select { |attempt| attempt.decision == 'selected' }
     end
     private_class_method :real_attempts
+
+    def self.skipped_attempts(outcomes)
+      outcomes.flat_map(&:attempts).select { |attempt| attempt.decision == 'skipped' }
+    end
+    private_class_method :skipped_attempts
 
     def self.attempt_entry(attempts)
       successful = attempts.count { |attempt| attempt.result == 'approved' }

@@ -28,8 +28,8 @@ module Routing
         @history = history
       end
 
-      def rank(candidates, _operation, _state)
-        candidates.sort { |left, right| compare(left, right) }
+      def rank(candidates, operation, _state)
+        candidates.sort { |left, right| compare(left, right, operation.bank) }
       end
 
       def name = 'conversion'
@@ -45,9 +45,9 @@ module Routing
 
       private
 
-      def compare(left, right)
-        left_value = approved_bp(left)
-        right_value = approved_bp(right)
+      def compare(left, right, bank)
+        left_value = approved_bp(left, bank)
+        right_value = approved_bp(right, bank)
         return -1 if left_value > right_value
         return 1 if left_value < right_value
 
@@ -56,10 +56,10 @@ module Routing
 
       # Базисные пункты, не Float: сравнение целых, без округления.
       # Неизвестный провайдер получает дефолт HistoryStats (0).
-      def approved_bp(provider)
+      def approved_bp(provider, bank = nil)
         return 0 if @history.nil?
 
-        @history.approved_bp(provider.name)
+        bank ? @history.approved_bp_for(provider.name, bank) : @history.approved_bp(provider.name)
       end
 
       # ‰ только для explain, не для решения: Rational#round, без float.

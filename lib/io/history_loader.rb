@@ -87,8 +87,9 @@ module Io
         [name,
          build_entry(outcome_counts, totals.fetch(name), pooled, k_value, smoothing: smoothing)]
       end
+      bank_entries = build_bank_entries(rows, entries, k_value, smoothing)
       Io::HistoryStats.new(entries: entries, k: k_value, smoothed: smoothing, rows: rows,
-                           diagnostics: diagnostics)
+                           diagnostics: diagnostics, bank_entries: bank_entries)
     end
     private_class_method :build_stats
     # rubocop:enable Metrics/MethodLength
@@ -201,5 +202,27 @@ module Io
       raise "Файл истории операций не найден: #{path}"
     end
     private_class_method :each_row
+
+    def self.build_bank_entries(rows, provider_entries, k_value, smoothing)
+      grouped = rows.select { |row| valid_status?(row['status']) && row['bank'] }
+                    .group_by { |row| [row['payment_system'], row['bank']] }
+      grouped.to_h do |key, bank_rows|
+        counts = STATUSES.to_h do |status|
+          [status, bank_rows.count { |row| row['status'] == status.to_s }]
+        end
+        prior = provider_entries.fetch(key.first)
+        n = bank_rows.size
+        bp = STATUSES.to_h do |status|
+          raw = counts.fetch(status)
+          prior_share = Rational(prior.public_send("#{status}_bp"), BASIS_POINTS)
+          share = smoothing ? (Rational(raw) + (prior_share * k_value)) / (n + k_value) : Rational(raw, n)
+          [status, (share * BASIS_POINTS).round]
+        end
+        [key, Io::HistoryStats::Entry.new(n: n, approved_count: counts[:approved],
+                                          rejected_count: counts[:rejected], expired_count: counts[:expired],
+                                          approved_bp: bp[:approved], rejected_bp: bp[:rejected], expired_bp: bp[:expired])]
+      end
+    end
+    private_class_method :build_bank_entries
   end
 end

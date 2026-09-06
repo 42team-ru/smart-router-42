@@ -100,6 +100,7 @@ make validate    # прогон + валидатор организаторов
 bundle exec bin/route <queue.json> [--out-dir DIR] [--providers PATH]
                       [--config PATH] [--strategy NAME]
                       [--outcomes NAME] [--seed SEED] [--script PATH]
+                      [--set KEY=VALUE]
 ```
 
 </details>
@@ -152,6 +153,17 @@ fallback_provider: spacepayments
 
 Приоритет источников: **флаг CLI › YAML › дефолт**. Кода-дефолта стратегии нет —
 имя всегда приходит либо из флага, либо из конфига.
+
+Для быстрой проверки правила без изменения YAML используйте повторяемый `--set`:
+
+```bash
+bundle exec bin/route reference/data/operations_queue_10.json \
+  --set providers.vipay.traffic_percentage=15
+```
+
+Значение действует только в текущем процессе. Опечатка в обычном пути печатает
+warning в stderr; поля провайдера разрешены только из явного списка, а имя
+провайдера проверяется по загруженному снапшоту.
 
 <details>
 <summary><b>Готовые конфигурации</b></summary>
@@ -308,5 +320,8 @@ Look-ahead исключён требованием онлайн-обработк
 
 Устройство движка, контракты модулей, форматы файлов и инварианты —
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+Команды запуска, все CLI-флаги, ключи YAML и готовые конфигурации —
+[`docs/CONFIGURATION.md`](docs/CONFIGURATION.md).
 
 Контракт HTTP-слоя — [`docs/openapi.yaml`](docs/openapi.yaml).

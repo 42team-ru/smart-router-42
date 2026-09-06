@@ -16,11 +16,14 @@ module Config
     OPTIONAL_DEFAULTS = {
       layers: [], goals: {}, strategy_selection: {}, outcomes: {},
       amount_ranges: [], obligations: {}, rate_limits: {}, cascade: {}, comparison: [],
-      history_path: DEFAULT_HISTORY_PATH, offline_analytics: {}, pending_resolution: {}
+      history_path: DEFAULT_HISTORY_PATH, offline_analytics: {}, pending_resolution: {},
+      providers: {}, providers_extra_path: nil
     }.freeze
 
-    def self.load(path)
+    def self.load(path, overrides: [], warn: $stderr)
       raw = read_yaml!(path)
+      require_relative 'overrides' unless overrides.empty?
+      Overrides.apply(raw, overrides, warn: warn) unless overrides.empty?
       SchemaValidator.validate!(raw)
       build_config(raw)
     end

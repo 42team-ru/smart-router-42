@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Metrics/MethodLength, Layout/LineLength
+
 require 'json'
 require_relative '../io/history_stats'
 require_relative '../routing/reasons'
@@ -11,6 +13,11 @@ require_relative 'distributions'
 require_relative 'recommendations'
 require_relative 'retarget'
 require_relative 'utilization'
+require_relative 'cost_efficiency'
+require_relative 'limits_usage'
+require_relative 'target_feasibility'
+require_relative 'conversion_check'
+require_relative 'outcomes_summary'
 
 module Reporting
   # Сборка routing_report.json из уже готовых решений.
@@ -136,23 +143,37 @@ module Reporting
                        achievable_volume, eligibility, metrics)
       {
         'skip_reasons' => Distributions.skip_reasons(outcomes),
+        'skip_reasons_by_provider' => Distributions.skip_reasons_by_provider(outcomes),
         'projected_daily_utilization' => Utilization.projected_daily(pairs, providers),
-        'fallback' => fallback(outcomes),
+        'fallback' => fallback(outcomes, eligibility),
+        'routing_quality' => routing_quality(outcomes),
+        'strategy_timeline' => strategy_timeline(pairs),
+        'cost_efficiency' => CostEfficiency.build(pairs, providers, eligibility),
+        'limits_usage' => LimitsUsage.build(pairs, providers),
+        'target_feasibility' => TargetFeasibility.build(pairs, providers, achievable),
+        'conversion_check' => ConversionCheck.build(providers, history),
+        'outcomes_summary' => OutcomesSummary.build(pairs, history),
         'benchmark' => benchmark || self.benchmark,
         'deviation_causes' => DeviationCauses.build(pairs, providers, achievable, eligibility,
                                                     achievable_volume: achievable_volume),
-        'recommendations' => build_recommendations(pairs, providers, history, achievable, metrics)
+        **recommendation_sections(pairs, providers, history, achievable, metrics)
       }
     end
     private_class_method :analytics
 
-    def self.build_recommendations(pairs, providers, history, achievable, metrics)
-      recommendations = Recommendations.build(pairs, providers, history)
+    def self.recommendation_sections(pairs, providers, history, achievable, metrics)
+      detailed = Recommendations.build_detailed(pairs, providers, history)
       retarget = Retarget.build(providers, achievable, metrics)
-
-      retarget ? recommendations + [retarget] : recommendations
+      unless retarget.nil?
+        detailed << { 'code' => 'retarget', 'provider' => nil, 'param' => 'traffic_percentage',
+                      'current' => nil, 'suggested' => nil, 'evidence' => {}, 'severity' => 'medium',
+                      'message' => retarget }
+      end
+      deduplicated = detailed.uniq { |item| [item['provider'], item['param']] }
+      { 'recommendations' => deduplicated.map { |item| item.fetch('message') },
+        'recommendations_detailed' => deduplicated }
     end
-    private_class_method :build_recommendations
+    private_class_method :recommendation_sections
 
     def self.period(operations)
       return nil if operations.empty?
@@ -161,7 +182,7 @@ module Reporting
     end
     private_class_method :period
 
-    def self.fallback(outcomes)
+    def self.fallback(outcomes, _eligibility)
       stats = outcomes.map { |outcome| fallback_stat(outcome) }
 
       {
@@ -173,6 +194,43 @@ module Reporting
       }
     end
     private_class_method :fallback
+
+    def self.routing_quality(outcomes)
+      considered = outcomes.map { |outcome| outcome.attempts.size }
+      { 'avg_providers_considered' => average(considered),
+        'single_option_operations' => considered.count(1),
+        'definition' => 'considered = skipped eligibility checks + selected cascade attempts' }
+    end
+    private_class_method :routing_quality
+
+    # Первую selected-попытку bin/route обогащает именем стратегии, выбранной
+    # selector'ом. Хронология сохраняет этот факт отдельно от длинного details.
+    def self.strategy_timeline(pairs)
+      pairs.map do |operation, outcome|
+        attempt = outcome.attempts.find { |item| item.decision == 'selected' }
+        { 'operation_id' => operation.operation_id, 'strategy' => attempt&.strategy,
+          'selected_provider' => outcome.selected.name }
+      end
+    end
+    private_class_method :strategy_timeline
+
+    def self.average(values)
+      return 0.0 if values.empty?
+
+      (values.sum.to_f / values.size).round(2)
+    end
+    private_class_method :average
+
+    def self.average_providers_considered(outcomes)
+      return 0.0 if outcomes.empty?
+
+      (outcomes.sum do |outcome|
+        outcome.attempts.count do |attempt|
+          attempt.decision == 'selected'
+        end
+      end.to_f / outcomes.size).round(2)
+    end
+    private_class_method :average_providers_considered
 
     # Классифицирует одну заявку: первая реальная попытка approved,
     # восстановлена каскадом (>1 реальной попытки, approved), либо каскад
@@ -219,3 +277,4 @@ module Reporting
     private_class_method :benchmark
   end
 end
+# rubocop:enable Metrics/MethodLength, Layout/LineLength

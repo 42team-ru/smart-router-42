@@ -16,10 +16,11 @@ module Config
   RoutingConfig = Data.define(
     :strategy, :layers, :goals, :strategy_selection, :outcomes,
     :amount_ranges, :obligations, :rate_limits, :fallback_provider, :cascade, :comparison,
-    :history_path, :offline_analytics, :pending_resolution
+    :history_path, :offline_analytics, :pending_resolution, :providers, :providers_extra_path
   ) do
     def initialize(cascade: {}, comparison: [], history_path: DEFAULT_HISTORY_PATH,
-                   offline_analytics: {}, pending_resolution: {}, **rest)
+                   offline_analytics: {}, pending_resolution: {}, providers: {},
+                   providers_extra_path: nil, **rest)
       super
     end
   end

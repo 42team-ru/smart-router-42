@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+# rubocop:disable Metrics/AbcSize, Layout/LineLength
+
 module Reporting
   # Конкретный параметр и значение, а не наблюдение -- расхождение паспортной
   # conversion_24h с историей и приближение к дневному лимиту.
@@ -19,6 +21,12 @@ module Reporting
     TRAFFIC_STEP_DOWN = 15
 
     def self.build(pairs, providers, history)
+      build_detailed(pairs, providers, history).map do |recommendation|
+        recommendation.fetch('message')
+      end
+    end
+
+    def self.build_detailed(pairs, providers, history)
       avg_amount = average_amount(pairs)
 
       providers.flat_map do |provider|
@@ -43,7 +51,13 @@ module Reporting
       observed = history.approved_ratio(provider.name)
       return nil if (provider.conversion_24h - observed).abs < CONVERSION_GAP_THRESHOLD
 
-      conversion_message(provider, history, observed)
+      { 'code' => 'conversion_gap', 'provider' => provider.name, 'param' => 'conversion_24h',
+        'current' => provider.conversion_24h, 'suggested' => observed,
+        'evidence' => { 'observations' => history.observations(provider.name),
+                        'approved' => history.approved_count(provider.name),
+                        'gap_pp' => ((observed - provider.conversion_24h) * 100).round(1) },
+        'severity' => history.observations(provider.name) >= LARGE_SAMPLE_N ? 'high' : 'medium',
+        'message' => conversion_message(provider, history, observed) }
     end
     private_class_method :conversion
 
@@ -84,7 +98,11 @@ module Reporting
       free = provider.daily_amount_limit - (provider.daily_approved_amount || 0)
       return nil if (free / avg_amount).floor > MAX_SLOTS_LEFT
 
-      headroom_message(provider, free, avg_amount)
+      lowered = [provider.traffic_percentage - TRAFFIC_STEP_DOWN, 0].max
+      { 'code' => 'limit_headroom', 'provider' => provider.name, 'param' => 'traffic_percentage',
+        'current' => provider.traffic_percentage, 'suggested' => lowered,
+        'evidence' => { 'free_amount' => free, 'average_amount' => avg_amount }, 'severity' => 'high',
+        'message' => headroom_message(provider, free, avg_amount) }
     end
     private_class_method :headroom
 
@@ -104,3 +122,4 @@ module Reporting
     private_class_method :format_amount
   end
 end
+# rubocop:enable Metrics/AbcSize, Layout/LineLength

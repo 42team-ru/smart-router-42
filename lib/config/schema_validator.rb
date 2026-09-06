@@ -13,7 +13,7 @@ module Config
     KNOWN_TOP_LEVEL_KEYS = %w[
       strategy layers goals strategy_selection outcomes
       amount_ranges obligations rate_limits fallback_provider cascade comparison
-      history_path offline_analytics pending_resolution
+      history_path offline_analytics pending_resolution providers providers_extra_path
     ].freeze
 
     def self.validate!(raw)
@@ -64,6 +64,8 @@ module Config
       validate_hash!(raw['goals'], 'goals')
       validate_hash!(raw['strategy_selection'], 'strategy_selection')
       validate_hash!(raw['outcomes'], 'outcomes')
+      validate_hash!(raw['providers'], 'providers')
+      validate_optional_string!(raw['providers_extra_path'], 'providers_extra_path')
       SchemaRules.validate_outcomes!(raw['outcomes'])
       SchemaRules.validate_offline_analytics!(raw['offline_analytics'])
       SchemaRules.validate_pending_resolution!(raw['pending_resolution'])
@@ -75,7 +77,14 @@ module Config
       raise SchemaError, "Ключ `#{key}` должен быть отображением, получено: #{value.class}"
     end
 
+    def self.validate_optional_string!(value, key)
+      return if value.nil? || value.is_a?(String)
+
+      raise SchemaError, "Ключ `#{key}` должен быть строкой, получено: #{value.class}"
+    end
+
     private_class_method :validate_root!, :validate_known_keys!, :validate_required!,
-                         :require_string!, :validate_types!, :validate_hashes!, :validate_hash!
+                         :require_string!, :validate_types!, :validate_hashes!, :validate_hash!,
+                         :validate_optional_string!
   end
 end
