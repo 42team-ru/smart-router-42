@@ -232,11 +232,9 @@ RSpec.describe 'bin/route' do
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
 
         expect(status.exitstatus).to eq(0), stderr
-        # cascade.exhausted: last_candidate + on_timeout: stop (дефолты,
-        # проверенные reference_decisions.json/`make validate`) держат
-        # op_103/op_104 на quickpay -- ни один не доезжает до spacepayments;
-        # перемерено под текущие дефолты каскада, не подогнано.
-        expect(distribution(tmp)).to eq('quickpay' => 7, 'vipay' => 1, 'payflow' => 2)
+        # Перемерено с боевыми layers: [share_ceiling, budget_headroom] и
+        # share_ceiling.tolerance_bp: 1000; проверяет именно YAML-стратегию.
+        expect(distribution(tmp)).to eq('quickpay' => 4, 'vipay' => 3, 'payflow' => 3)
       end
     end
 
@@ -248,7 +246,8 @@ RSpec.describe 'bin/route' do
                                             '--strategy', 'priority')
 
         expect(status.exitstatus).to eq(0), stderr
-        expect(distribution(tmp)).to eq('vipay' => 4, 'payflow' => 3, 'quickpay' => 3)
+        # Перемерено с боевыми layers/tolerance; CLI всё ещё перекрывает YAML.
+        expect(distribution(tmp)).to eq('vipay' => 4, 'payflow' => 2, 'quickpay' => 4)
       end
     end
 
@@ -263,14 +262,16 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    it 'на непустой layers падает кодом 1, а не игнорирует его молча' do
+    it 'на неизвестный слой падает кодом 1, а не игнорирует его молча' do
       Dir.mktmpdir do |tmp|
-        config = config_with(tmp, 'layers: []', 'layers: [conversion]')
+        config = config_with(
+          tmp, 'layers: [share_ceiling, budget_headroom]', 'layers: [unknown_layer]'
+        )
 
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
 
         expect(status.exitstatus).to eq(1)
-        expect(stderr).to include('layer').and include('conversion')
+        expect(stderr).to include('layer').and include('unknown_layer')
       end
     end
 
@@ -422,12 +423,12 @@ RSpec.describe 'bin/route' do
           'amount' => 5000, 'bank' => 'qiwi', 'card_brand' => nil, 'payout_requisite' => {} }
       end
 
-      # test_op_65: payflow и quickpay допустимы (bank alfa исключает vipay).
-      # count_share ставит payflow первым (traffic_percentage 35 против 25 при
-      # равных счётчиках). seed 42 даёт expired на payflow (attempt 1) и
-      # approved на quickpay (attempt 2) -- подобрано заранее тем же расчётом.
+      # test_op_1: payflow и quickpay допустимы (bank alfa исключает vipay).
+      # Под боевыми layers [share_ceiling, budget_headroom] / tolerance 1000
+      # первым идёт quickpay. seed 42 даёт ему expired (attempt 1), а payflow
+      # approved (attempt 2) -- перемерено по фактическому CLI-прогону.
       def timeout_operation
-        { 'operation_id' => 'test_op_65', 'created_at' => '2026-07-30T09:05:00+03:00',
+        { 'operation_id' => 'test_op_1', 'created_at' => '2026-07-30T09:05:00+03:00',
           'amount' => 2000, 'bank' => 'alfa', 'card_brand' => nil, 'payout_requisite' => {} }
       end
 
@@ -476,7 +477,7 @@ RSpec.describe 'bin/route' do
           decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
 
           expect(status.exitstatus).to eq(0), stderr
-          expect(decisions.first['selected_provider']).to eq('payflow')
+          expect(decisions.first['selected_provider']).to eq('quickpay')
           expect(decisions.first['simulated_result']).to eq('expired')
           expect(decisions.first['attempts'].count { |a| a['decision'] == 'selected' }).to eq(1)
         end
@@ -492,11 +493,11 @@ RSpec.describe 'bin/route' do
           attempts = decisions.first['attempts']
 
           expect(status.exitstatus).to eq(0), stderr
-          expect(decisions.first['selected_provider']).to eq('quickpay')
+          expect(decisions.first['selected_provider']).to eq('payflow')
           expect(decisions.first['simulated_result']).to eq('approved')
           selected = attempts.select { |a| a['decision'] == 'selected' }
           expect(selected.map { |a| [a['provider'], a['result']] })
-            .to eq([%w[payflow expired], %w[quickpay approved]])
+            .to eq([%w[quickpay expired], %w[payflow approved]])
         end
       end
 
@@ -524,7 +525,7 @@ RSpec.describe 'bin/route' do
           comparison:
             - { name: round_robin,        strategy: round_robin, layers: [] }
             - { name: count_share,        strategy: count_share, layers: [] }
-            - { name: count_share+layers, strategy: count_share, layers: [budget_headroom, share_ceiling] }
+            - { name: count_share+layers, strategy: count_share, layers: [share_ceiling, budget_headroom] }
         YAML
       end
 
@@ -534,7 +535,7 @@ RSpec.describe 'bin/route' do
 
           expect(status.exitstatus).to eq(0), stderr
           expect(stdout).to include('Сравнение (офлайн, не влияет на решения)')
-          expect(stdout).to include('count_share (baseline)')
+          expect(stdout).to include('count_share+layers (baseline)')
         end
       end
 
@@ -545,7 +546,7 @@ RSpec.describe 'bin/route' do
 
           expect(report['comparison']['variants'].keys)
             .to eq(%w[round_robin count_share count_share+layers])
-          expect(report['comparison']['baseline']).to eq('count_share')
+          expect(report['comparison']['baseline']).to eq('count_share+layers')
         end
       end
 
@@ -597,10 +598,12 @@ RSpec.describe 'bin/route' do
           # op_103/op_104/reference_decisions.json выше), seed 42 на поздней
           # проверке (attempt_no -1) даёт approved -- перемерено на фактическом
           # прогоне, не подогнано.
-          expect(pending).to include('checked' => 1, 'resolved' => 1, 'approved' => 1,
+          # Перемерено под боевыми layers [share_ceiling, budget_headroom] и
+          # tolerance 1000: второй проход теперь получает два expired hold.
+          expect(pending).to include('checked' => 2, 'resolved' => 2, 'approved' => 2,
                                      'rejected' => 0, 'still_pending' => 0,
-                                     'freed_in_progress_count' => 1,
-                                     'freed_in_progress_amount' => 150_000)
+                                     'freed_in_progress_count' => 2,
+                                     'freed_in_progress_amount' => 198_000)
           expect(pending['utilization']['quickpay']['used_after'])
             .to be > pending['utilization']['quickpay']['used_before']
         end

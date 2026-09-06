@@ -36,8 +36,10 @@ RSpec.describe 'переключение поведения конфигом' do
   # spacepayments в дефолтном каскаде не подключается. Все четыре
   # распределения перемерены под текущие дефолты каскада, а не подогнаны на
   # глаз.
-  def count_share_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
-  def load_split = { 'quickpay' => 7, 'vipay' => 1, 'payflow' => 2 }
+  # Перемерено 2026-09-06 под layers [share_ceiling, budget_headroom] и
+  # tolerance_bp: 1000; это реальные результаты CLI, не расчёт на бумаге.
+  def count_share_split = { 'vipay' => 4, 'payflow' => 2, 'quickpay' => 4 }
+  def load_split = { 'quickpay' => 4, 'vipay' => 3, 'payflow' => 3 }
   def band_payflow_split = { 'payflow' => 3, 'vipay' => 3, 'quickpay' => 4 }
   def band_vipay_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
 
@@ -113,7 +115,10 @@ RSpec.describe 'переключение поведения конфигом' do
     # дефолтными (пустыми): тогда amount_range вырождается в priority.
     it 'полоса за payflow ставит payflow первым на op_101' do
       Dir.mktmpdir do |tmp|
-        decisions = decisions_for(tmp, { strategy_line => 'strategy: amount_range' })
+        decisions = decisions_for(
+          tmp, { strategy_line => 'strategy: amount_range',
+                 'layers: [share_ceiling, budget_headroom]' => 'layers: []' }
+        )
 
         expect(split(decisions)).to eq(band_payflow_split)
         expect(op101(decisions)['selected_provider']).to eq('payflow')
@@ -126,6 +131,7 @@ RSpec.describe 'переключение поведения конфигом' do
         decisions = decisions_for(
           tmp,
           { strategy_line => 'strategy: amount_range',
+            'layers: [share_ceiling, budget_headroom]' => 'layers: []',
             payflow_band => '  - { from: 500, to: 50000, prefer: vipay }' }
         )
 

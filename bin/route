@@ -570,8 +570,8 @@ end
 
 # Секции строятся у границы пайплайна: здесь доступны исходные загрузчики,
 # тогда как ReportBuilder только собирает уже готовые данные в стабильный JSON.
-# rubocop:disable-next Metrics/AbcSize -- секции собираются явно в одном месте границы пайплайна.
-def build_report_sections(pairs, inputs, history_path)
+# rubocop:disable Metrics/AbcSize, Metrics/MethodLength -- секции собираются явно в одном месте границы пайплайна.
+def build_report_sections(pairs, inputs, history_path, include_recommendation_effect: true)
   # В отчёте достаточно имени файла: абсолютный путь флага не должен менять
   # содержимое при ссылке на ту же историю из конфигурации.
   source = File.basename(history_path || inputs[:config].history_path)
@@ -580,15 +580,18 @@ def build_report_sections(pairs, inputs, history_path)
     'queue_coverage' => Reporting::QueueCoverage.build(inputs[:queue], pairs),
     'input_diagnostics' => Reporting::InputDiagnostics.build(inputs[:queue], inputs[:history],
                                                              inputs[:providers]),
-    'amount_bands' => Reporting::AmountBands.build(pairs, inputs[:history]),
-    'recommendation_effect' => Reporting::RecommendationEffect.build(
-      pairs, operations: inputs[:operations], providers: inputs[:providers],
-      config: inputs[:config], history: inputs[:history]
-    )
+    'amount_bands' => Reporting::AmountBands.build(pairs, inputs[:history])
   }
+  if include_recommendation_effect
+    sections['recommendation_effect'] = Reporting::RecommendationEffect.build(
+      pairs, operations: inputs[:operations], providers: inputs[:providers],
+      config: inputs[:config],    history: inputs[:history]
+    )
+  end
   latency = Reporting::LatencyProfile.build(inputs[:history], source)
   latency.nil? ? sections : sections.merge('latency_profile' => latency)
 end
+# rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
 # Гейт для дорогой офлайн-аналитики целиком (см. offline_analytics_enabled?).
 # Ниже порога -- поведение как раньше, benchmark/comparison настоящие. Выше
@@ -617,10 +620,15 @@ def main(argv)
   decisions_path, report_path = write_outputs(
     options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy],
     benchmark: benchmark, comparison: comparison, pending_resolution: pending_resolution,
-    report_sections: build_report_sections(pairs, inputs, options[:history_path])
+    report_sections: build_report_sections(
+      pairs, inputs, options[:history_path],
+      include_recommendation_effect: offline_analytics_enabled?(
+        options, inputs[:config], inputs[:operations].size
+      )
+    )
   )
 
-  print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution)
+  print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution, options)
 
   puts "Прочитано операций: #{inputs[:operations].size}"
   puts "Записано: #{decisions_path}"
@@ -635,16 +643,23 @@ end
 # (distribution/achievable/deviation_causes/recommendations). pending_resolution
 # тоже готовый хеш (или nil, когда второй проход выключен) -- второй проход
 # по held-резервам здесь не повторяется, он мутировал state один раз в main.
-def print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution)
+# rubocop:disable Metrics/MethodLength, Metrics/ParameterLists -- CLI boundary passes completed pipeline values explicitly.
+def print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution, options)
   report = Reporting::ReportBuilder.build(
     pairs, providers: inputs[:providers], history: inputs[:history],
            strategy: inputs[:strategy].name, benchmark: benchmark, comparison: comparison,
            pending_resolution: pending_resolution,
-           report_sections: build_report_sections(pairs, inputs, nil)
+           report_sections: build_report_sections(
+             pairs, inputs, nil,
+             include_recommendation_effect: offline_analytics_enabled?(
+               options, inputs[:config], inputs[:operations].size
+             )
+           )
   )
 
   Reporting::ConsoleSummary.operation_lines(pairs).each { |line| puts line }
   Reporting::ConsoleSummary.summary_lines(report).each { |line| puts line }
 end
+# rubocop:enable Metrics/MethodLength, Metrics/ParameterLists
 
 main(ARGV) if $PROGRAM_NAME == __FILE__

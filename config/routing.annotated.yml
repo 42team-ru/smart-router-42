@@ -27,11 +27,9 @@ history_path: reference/data/operations_history.csv
 # obligations, round_robin — переключаются этой одной строкой.
 strategy: count_share
 
-# Слои-модификаторы поверх порядка от стратегии. Пустой список — боевой выбор:
-# ψ-слой budget_headroom меняет целевое распределение, а на публичной очереди
-# count_share уже попадает в потолок, портить нечего. Доступны budget_headroom
-# и share_ceiling; сравнение с ними — в comparison ниже.
-layers: []
+# Слои-модификаторы поверх порядка от стратегии. Порядок существенен:
+# share_ceiling идёт первым, чтобы не допускать перебора доли до экономии бюджета.
+layers: [share_ceiling, budget_headroom]
 
 # Пороги слоёв. Инертны, пока слой не включён в layers выше, но comparison
 # гоняет вариант count_share+layers, и там они работают.
@@ -39,8 +37,8 @@ goals:
   # BALANCE из задачи AdWords: чем больше дневного лимита истрачено, тем
   # дороже оставшийся рубль. Порог — с какой доли расхода придерживать.
   budget_headroom: { activates_at_spent_pct: 90 }
-  # Допуск перебора целевой доли в базисных пунктах: 0 — не перебирать вовсе.
-  share_ceiling: { tolerance_bp: 0 }
+  # Середина устойчивого плато 700..1200 бп, измеренного на боевой очереди.
+  share_ceiling: { tolerance_bp: 1000 }
 
 outcomes:
   # Источник исходов попытки. always_ok — прямое указание организаторов
@@ -137,4 +135,4 @@ offline_analytics:
 comparison:
   - { name: round_robin,        strategy: round_robin, layers: [] }
   - { name: count_share,        strategy: count_share, layers: [] }
-  - { name: count_share+layers, strategy: count_share, layers: [budget_headroom, share_ceiling] }
+  - { name: count_share+layers, strategy: count_share, layers: [share_ceiling, budget_headroom] }

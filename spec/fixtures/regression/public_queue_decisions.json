@@ -7,7 +7,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/1=4000 против payflow 3500/1=3500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/1=4000 против payflow 3500/1=3500 | share_ceiling: без перестановки, максимальное превышение 0 bp | budget_headroom: vipay psi 0.302 (запас есть, порог не пройден) -> с 1 на 1; payflow psi 0.033 (ниже порога на 0.062) -> с 2 на 3; quickpay psi 0.578 (запас есть, порог не пройден) -> с 3 на 2; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -18,7 +18,7 @@
   },
   {
     "operation_id": "op_102",
-    "selected_provider": "payflow",
+    "selected_provider": "quickpay",
     "attempts": [
       {
         "provider": "vipay",
@@ -27,17 +27,17 @@
         "details": "bank alfa не входит в banks [sberbank, tinkoff, vtb] (3 банка)"
       },
       {
-        "provider": "payflow",
+        "provider": "quickpay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/1=3500 против quickpay 2500/1=2500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/1=3500 против quickpay 2500/1=2500 | share_ceiling: без перестановки, максимальное превышение 0 bp | budget_headroom: payflow psi 0.033 (ниже порога на 0.062) -> с 1 на 2; quickpay psi 0.578 (запас есть, порог не пройден) -> с 2 на 1; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
       }
     ],
     "simulated_result": "approved",
-    "latency_sec": 52
+    "latency_sec": 29
   },
   {
     "operation_id": "op_103",
@@ -59,7 +59,7 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/1=2500, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/3=833, других допустимых нет | share_ceiling: без перестановки, максимальное превышение 2500 bp | budget_headroom: без перестановки, минимальный запас 0.575; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -88,7 +88,7 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/3=833, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/5=500, других допустимых нет | share_ceiling: без перестановки, максимальное превышение 4167 bp | budget_headroom: без перестановки, минимальный запас 0.567; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -111,7 +111,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/3=1333 против quickpay 2500/5=500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/3=1333 против quickpay 2500/7=357 | share_ceiling: без перестановки, максимальное превышение 5000 bp | budget_headroom: без перестановки, минимальный запас 0.300; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -134,7 +134,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/5=800 против quickpay 2500/5=500",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/5=800 против quickpay 2500/7=357 | share_ceiling: без перестановки, максимальное превышение 3500 bp | budget_headroom: без перестановки, минимальный запас 0.297; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -163,7 +163,7 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/3=1166, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/1=3500, других допустимых нет | share_ceiling: без перестановки, максимальное превышение 0 bp | budget_headroom: без перестановки, минимальный запас 0.033; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -192,7 +192,7 @@
         "provider": "quickpay",
         "decision": "selected",
         "reason": "only_eligible_provider",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/5=500, других допустимых нет",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: quickpay 2500/7=357, других допустимых нет | share_ceiling: без перестановки, максимальное превышение 1786 bp | budget_headroom: без перестановки, минимальный запас 0.567; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -215,7 +215,7 @@
         "provider": "vipay",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/7=571 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: vipay 4000/7=571 против quickpay 2500/9=277 | share_ceiling: без перестановки, максимальное превышение 2500 bp | budget_headroom: без перестановки, минимальный запас 0.289; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"
@@ -238,7 +238,7 @@
         "provider": "payflow",
         "decision": "selected",
         "reason": "best_target_adherence",
-        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/5=700 против quickpay 2500/7=357",
+        "details": "selector: статический выбор (1 стратегия) -> count_share | count_share: payflow 3500/3=1166 против quickpay 2500/9=277 | share_ceiling: без перестановки, максимальное превышение 1945 bp | budget_headroom: без перестановки, минимальный запас 0.033; порог: вмешиваемся с 90% израсходованного лимита (psi 0.095)",
         "strategy": "count_share",
         "attempt_no": 1,
         "result": "approved"

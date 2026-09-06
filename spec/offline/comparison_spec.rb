@@ -34,10 +34,10 @@ RSpec.describe Offline::Comparison do
     Io::ProviderOverrides.apply(raw_providers, obligations: config.obligations,
                                                rate_limits: config.rate_limits)
   end
-  let(:operations) { Io::QueueLoader.load(reference_path('operations_queue_10.json')).operations }
+  let(:operations) { Io::QueueLoader.load(reference_path('operations_queue_90.json')).operations }
   let(:history) { Io::HistoryLoader.load(reference_path('operations_history.csv')) }
 
-  def build(variants: config.comparison, baseline: 'count_share')
+  def build(variants: config.comparison, baseline: 'count_share+layers')
     described_class.build(variants: variants, operations: operations, providers: providers,
                           config: config, history: history, baseline: baseline)
   end
@@ -50,7 +50,7 @@ RSpec.describe Offline::Comparison do
       entry.fetch('deviation_pp').abs
     end.max
 
-    baseline_metrics = build.fetch('variants').fetch('count_share')
+    baseline_metrics = build.fetch('variants').fetch('count_share+layers')
 
     expect(baseline_metrics['delivered']).to eq(expected_delivered)
     expect(baseline_metrics['max_deviation_pp']).to eq(expected_max_deviation)
@@ -81,7 +81,7 @@ RSpec.describe Offline::Comparison do
   end
 
   it 'baseline в результате -- переданное имя, а не домысленное' do
-    expect(build.fetch('baseline')).to eq('count_share')
+    expect(build.fetch('baseline')).to eq('count_share+layers')
   end
 
   it 'metrics каждого варианта содержат ровно контрактные ключи' do

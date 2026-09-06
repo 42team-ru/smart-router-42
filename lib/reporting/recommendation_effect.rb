@@ -21,6 +21,8 @@ module Reporting
         'delta_max_deviation_pp' => (after['max_deviation_pp'] - before['max_deviation_pp']).round(1),
         'delta_delivered' => after['delivered'] - before['delivered'],
         'note' => Offline::Comparison::NOTE }
+    rescue ArgumentError => e
+      { 'applied' => [], 'note' => "recommendation_effect не считался: #{e.message}" }
     end
 
     def self.apply(providers, recommendations)
