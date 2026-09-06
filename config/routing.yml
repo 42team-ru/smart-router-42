@@ -1,32 +1,20 @@
-# Конфигурация роутинга. Схема и валидация — Config::Loader.
-#
-# Файл читает bin/route один раз на старте. Приоритет: флаг CLI > этот файл >
-# дефолт; --config меняет путь к самому файлу.
-#
-# obligations и rate_limits накладываются поверх data/providers.json, где эти
-# поля уже заполнены; CLI предупреждает только на снапшотах, где их нет
-# (например, на пристинном reference/data/providers.json).
+# Боевой конфиг: по нему идут `make deliver`, `make validate` и все демо.
+# Держится коротким намеренно. Построчные обоснования — config/routing.annotated.yml
+# (тот же набор значений, спек следит, чтобы файлы не разъехались).
 
-# История операций: отсюда берутся пороги симуляции исходов, порядок в
-# стратегии conversion и расхождение «паспорт против факта» в рекомендациях.
-# Файл читает bin/route — стратегии к диску не обращаются.
 history_path: reference/data/operations_history.csv
 
 strategy: count_share
-layers: [] # боевой выбор: ψ-слой меняет целевое распределение
+layers: []
 
-# Пороги целей для слоёв. Инертны, пока layers пуст.
 goals:
-  budget_headroom: { activates_at_spent_pct: 90 } # придерживаем с 90% лимита
+  budget_headroom: { activates_at_spent_pct: 90 }
   share_ceiling: { tolerance_bp: 0 }
 
 outcomes:
-  source: deterministic
+  source: always_ok # указание организаторов: на тестовой очереди всё approved
   seed: 42
   calibrate_from_history: true
-  # Сглаживание approved/rejected/expired к общему среднему (Io::HistoryLoader).
-  # Включено: у payflow 19 наблюдений, сырая доля на такой выборке ненадёжна.
-  # false — сырые approved/всего, для сравнения эффекта.
   smoothing: true
 
 amount_ranges:
@@ -34,60 +22,18 @@ amount_ranges:
   - { from: 50001, to: 100000, prefer: vipay }
   - { from: 100001, to: null, prefer: quickpay }
 
-obligations:
-  payflow: { daily_turnover_min: 2000000 }
-  vipay: { daily_turnover_max: 5000000 }
-
-rate_limits:
-  vipay: 7
-  payflow: 10
-  quickpay: 15
-
-# Обе трактовки ТЗ доступны переключателем, дефолты записаны явно:
-#   exhausted: last_candidate (дефолт) | fallback_provider
-#   on_timeout: stop (дефолт) | continue
-#
-# Дефолт держится на факте: reference/data/reference_decisions.json требует
-# quickpay на op_103 и op_104, где единственный допустимый кандидат отвечает
-# таймаутом. Любая из двух замен увела бы каскад на spacepayments и завалила
-# `make validate`.
-#
-# По существу таймаут означает «результат неизвестен», а не «отказ»: отправка
-# той же операции следующему провайдеру — риск двойной выплаты. Резерв при этом
-# держится (State#hold) и закрывается статус-чеком, не повторной попыткой.
-#
-# Буквальное прочтение ТЗ («при отказе/таймауте исключить провайдера и выбрать
-# следующего») — config/examples/tz_literal.yml.
 cascade:
   exhausted: last_candidate
   on_timeout: stop
 
 fallback_provider: spacepayments
 
-# Второй проход после всей очереди: поздний статус-чек по операциям, застрявшим
-# в :expired. Без него hold держит слот in_progress до конца прогона, и на
-# длинной очереди ёмкость проседает необратимо — Constraints::InProgress и
-# Requisites читают живые счётчики, а не снапшот. Доля таймаутов по истории:
-# vipay 9.2%, quickpay 15.2%, payflow 29.0%.
-#
-# Стоит одного детерминированного вызова того же outcome-источника на каждый
-# held-резерв. Уже выпущенные решения не переписывает, только добавляет секцию
-# pending_resolution в отчёт. false воспроизводит поведение до этого механизма:
-# оба выходных файла побайтово те же.
 pending_resolution:
   enabled: true
 
-# Порог размера очереди для дорогой офлайн-аналитики (оракул и сравнение
-# конфигураций): на 100 000 операций эта пара стоит ~20 с из ~29 с прогона, на
-# 10 000 — единицы секунд. Выше порога обе секции не считаются, и отчёт несёт
-# пометку в benchmark.status; принудительно — флаг --offline-analytics.
 offline_analytics:
   max_operations: 10000
 
-# Офлайн-сравнение стратегий. Идёт только в консоль и в секцию comparison
-# отчёта, в принятие решений не входит (spec/offline/isolation_spec.rb).
-# Ровно один вариант обязан совпадать с боевыми strategy/layers выше, иначе
-# SchemaError при загрузке: таблице нужна опора на фактический прогон.
 comparison:
   - { name: round_robin,        strategy: round_robin, layers: [] }
   - { name: count_share,        strategy: count_share, layers: [] }

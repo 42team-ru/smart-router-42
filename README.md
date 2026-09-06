@@ -141,7 +141,7 @@ bundle exec bin/route <queue.json> [--out-dir DIR] [--providers PATH]
 strategy: count_share
 layers: []                       # budget_headroom, share_ceiling
 outcomes:
-  source: deterministic
+  source: always_ok              # боевой; deterministic — модель исходов по истории
   seed: 42
   calibrate_from_history: true
 cascade:
@@ -208,6 +208,12 @@ bundle exec bin/route reference/data/operations_queue_10.json \
 `op_101` уходит в `payflow` после отказа `vipay` — в `attempts` две реальные
 попытки и причина `next_in_cascade`. Исход задан сценарием, поэтому результат
 не зависит от `--seed`.
+
+Отдельный конфиг здесь нужен потому, что боевой сдаёт `outcomes.source:
+always_ok` — на тестовой очереди все операции должны быть `approved` по
+указанию организаторов (`docs/RUNBOOK.md` §2), и отказов в сдаваемом файле нет
+по построению. Каскад от этого никуда не делся: он показывается этой командой,
+прогоном `--outcomes deterministic --seed 42` и спеками `spec/execution/`.
 
 ### Новая стратегия без правок ядра
 

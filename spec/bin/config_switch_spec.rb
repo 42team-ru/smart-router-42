@@ -53,8 +53,18 @@ RSpec.describe 'переключение поведения конфигом' do
   # Этот файл меняет strategy ради ДРУГИХ проверок (переключение стратегии
   # одной строкой YAML) и не обязан держать comparison согласованным с новым
   # значением, поэтому секция обрезается -- как в spec/bin/route_spec.rb.
+  # Боевой конфиг сдаёт always_ok по указанию организаторов (docs/RUNBOOK.md
+  # §2). Числа этого файла измерены под моделью исходов и её же проверяют,
+  # поэтому производный конфиг нормализуется на deterministic --seed 42.
+  def deterministic_outcomes(source)
+    raise 'ключ outcomes.source исчез из config/routing.yml' unless
+      source.include?('source: always_ok')
+
+    source.sub('source: always_ok', 'source: deterministic')
+  end
+
   def config_with(dir, replacements)
-    source = File.read(production_config)
+    source = deterministic_outcomes(File.read(production_config))
     replacements.each do |line, replacement|
       raise "строка #{line.inspect} исчезла из config/routing.yml" unless source.include?(line)
 

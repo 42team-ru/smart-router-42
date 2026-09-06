@@ -32,10 +32,28 @@ module Routing
     REGISTRY = [Status, TrafficShare, AmountRange, DailyLimit,
                 InProgress, BankFilter, Margin, Requisites].freeze
 
+    # Обычный цикл, а не REGISTRY.lazy.filter_map{}.first, хотя тот выражал
+    # намерение («первое нарушение») короче.
+    #
+    # Причина не в стиле, а в падении: на уровне l_oracle (1 000 000 заявок,
+    # 50 провайдеров) прогон валился с [BUG] Segmentation fault ровно в этом
+    # блоке — Ruby 4.0.6, кадры IFUNC от ленивого энумератора. Ruby-код
+    # сегфолтиться не умеет, это баг интерпретатора; чинить его нам нечем, а вот
+    # не подставляться под него — можно.
+    #
+    # Подставлялись мы масштабом: check зовётся на каждую пару (заявка,
+    # провайдер), то есть здесь строилось до 50 000 000 объектов
+    # Enumerator::Lazy, каждый со своей цепочкой блоков. Цикл не аллоцирует
+    # ничего и на длинной очереди ещё и заметно быстрее.
+    #
+    # Поведение прежнее дословно: проверки идут в порядке REGISTRY, возвращается
+    # первое нарушение, при чистом проходе — nil.
     def self.check(provider, operation, state = nil)
-      REGISTRY.lazy.filter_map do |constraint|
-        constraint.violation(provider, operation, state)
-      end.first
+      REGISTRY.each do |constraint|
+        violation = constraint.violation(provider, operation, state)
+        return violation if violation
+      end
+      nil
     end
 
     def self.eligible?(provider, operation, state = nil)

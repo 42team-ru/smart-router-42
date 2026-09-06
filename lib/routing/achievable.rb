@@ -203,8 +203,27 @@ module Routing
       (provider.volume_share_pct || provider.traffic_percentage).to_i * 100
     end
 
+    # Досыпка и срезка идут по одной единице. Для for_queue единица — операция,
+    # и цикл крутится по числу заявок. Для for_volume единица — РУБЛЬ, а total —
+    # сумма всей очереди, поэтому цена та же формально, но другая практически:
+    # на синтетической очереди в 501 заявку нижний цикл делал 7 694 870
+    # итераций и стоил ~10 с из 19 с всего прогона bin/route; даже на публичной
+    # очереди из 10 заявок он проходил 11 200 раз.
+    #
+    # Порядок раздачи и срезки задаёт ключ w/(2s+1) — тот же метод делителей,
+    # что и в count_share: вверх единицы уходят по убыванию ключа, вниз — по
+    # возрастанию. Значит итог — это «все единицы по одну сторону порога», и
+    # порог ищется двоичным поиском вместо перебора по единице.
+    #
+    # Засев не меняет поведение, а лишь перепрыгивает заведомую часть цикла:
+    # при w > 0 ключ инъективен по s, поэтому ровно на пороге у провайдера
+    # лежит не больше одной единицы, и остаток после засева не длиннее числа
+    # провайдеров — его добирают прежние циклы, слово в слово те же.
+    # Исключение — нулевой вес: там ключ равен нулю при любом s, такие
+    # провайдеры всегда крайние в порядке и разбираются отдельным проходом.
     def clamp!(seats, lower, upper, weights, total)
       seats.each_key { |name| seats[name] = [[seats[name], lower[name]].max, upper[name]].min }
+      seed_up!(seats, upper, weights, total)
       while seats.values.sum < total
         options = seats.keys.select { |name| seats[name] < upper[name] }
         break if options.empty?
@@ -212,6 +231,7 @@ module Routing
         chosen = options.reduce { |best, name| before?(name, best, weights, seats) ? name : best }
         seats[chosen] += 1
       end
+      seed_down!(seats, lower, weights, total)
       while seats.values.sum > total
         options = seats.keys.select { |name| seats[name] > lower[name] }
         break if options.empty?
@@ -219,6 +239,146 @@ module Routing
         chosen = options.reduce { |best, name| before?(best, name, weights, seats) ? name : best }
         seats[chosen] -= 1
       end
+    end
+
+    # Знаменатель порога: двоичный поиск идёт по целому числителю при
+    # фиксированном знаменателе, без Rational и без float. 2^128 с запасом
+    # разделяет соседние ключи w/(2s+1) — они расходятся не ближе чем на
+    # w/(2s²), а s ограничено суммой очереди.
+    SEED_DENOMINATOR = 1 << 128
+
+    # Сколько единиц у провайдера имеют ключ строго выше порога p/q:
+    # w/(2s+1) > p/q ⟺ s < (w·q − p)/(2p).
+    def units_above(weight, numerator)
+      return 0 unless weight.positive? && numerator.positive?
+
+      span = (weight * SEED_DENOMINATOR) - numerator
+      return 0 if span <= 0
+
+      ((span + (2 * numerator) - 1) / (2 * numerator))
+    end
+
+    # На сколько единиц садится провайдер, если срезать всё с ключом строго
+    # ниже порога. Срезка идёт сверху вниз и останавливается на первом s, где
+    # ключ дотянул до порога: w/(2s+1) ≥ p/q ⟺ s ≤ (w·q − p)/(2p).
+    # Вызывается только при numerator > 0.
+    def survivors_above(weight, numerator)
+      return 0 unless weight.positive?
+
+      ((weight * SEED_DENOMINATOR) - numerator) / (2 * numerator)
+    end
+
+    # Двоичный поиск числителя порога: predicate монотонен по нему, ищется
+    # граница. Шагов хватает с запасом — знаменатель 2^128, а различить надо
+    # соседние ключи вида w/(2s+1).
+    def seed_threshold(top, &predicate)
+      low = 0
+      high = top
+      260.times do
+        break if high - low <= 1
+
+        mid = (low + high) / 2
+        predicate.call(mid) ? high = mid : low = mid
+      end
+      high
+    end
+
+    # Верхняя граница поиска: при таком числителе выше порога не остаётся ни
+    # одной единицы ни у кого, то есть предикат заведомо на своей стороне.
+    def threshold_top(weights, names)
+      (weights.values_at(*names).map(&:to_i).max * SEED_DENOMINATOR * 2) + 1
+    end
+
+    def positive_weight_names(seats, weights)
+      seats.keys.select { |name| weights[name].to_i.positive? }
+    end
+
+    # Провайдеры с нулевым весом: ключ у них равен нулю при любом s, поэтому
+    # вверх они идут строго последними (по возрастанию имени), вниз — строго
+    # первыми (по убыванию имени). Инъективности ключа тут нет, и порог их не
+    # выражает, значит считаются они отдельным проходом.
+    def zero_weight_names(seats, weights)
+      seats.keys.select { |name| weights[name].to_i.zero? }
+    end
+
+    def seed_up!(seats, upper, weights, total)
+      return if total - seats.values.sum <= 0
+
+      seed_positive_up!(seats, upper, weights, total)
+      # Нулевой вес получает единицы только после того, как все положительные
+      # упёрлись в свой потолок: ключ 0 проигрывает любому положительному, и
+      # раздать нулевому раньше — значит опередить настоящий порядок.
+      return if positive_weight_names(seats, weights).any? { |name| seats[name] < upper[name] }
+
+      fill_zero_weight_up!(seats, upper, weights, total - seats.values.sum)
+    end
+
+    def seed_positive_up!(seats, upper, weights, total)
+      names = positive_weight_names(seats, weights)
+      return if names.empty?
+
+      constant = seats.values.sum - names.sum { |name| seats[name] }
+      numerator = seed_threshold(threshold_top(weights, names)) do |candidate|
+        constant + names.sum { |name| up_seats(seats, upper, weights, name, candidate) } <= total
+      end
+      names.each { |name| seats[name] = up_seats(seats, upper, weights, name, numerator) }
+    end
+
+    def up_seats(seats, upper, weights, name, numerator)
+      taken = units_above(weights[name].to_i, numerator)
+      [[taken, seats[name]].max, upper[name]].min
+    end
+
+    def fill_zero_weight_up!(seats, upper, weights, gap)
+      return if gap <= 0
+
+      zero_weight_names(seats, weights).sort.each do |name|
+        take = [upper[name] - seats[name], gap].min
+        next unless take.positive?
+
+        seats[name] += take
+        gap -= take
+        break if gap.zero?
+      end
+    end
+
+    def seed_down!(seats, lower, weights, total)
+      gap = seats.values.sum - total
+      return if gap <= 0
+
+      gap = drain_zero_weight_down!(seats, lower, weights, gap)
+      seed_positive_down!(seats, lower, weights, total) if gap.positive?
+    end
+
+    def seed_positive_down!(seats, lower, weights, total)
+      names = positive_weight_names(seats, weights)
+      return if names.empty?
+
+      constant = seats.values.sum - names.sum { |name| seats[name] }
+      numerator = seed_threshold(threshold_top(weights, names)) do |candidate|
+        constant + names.sum { |name| down_seats(seats, lower, weights, name, candidate) } < total
+      end
+      kept = [numerator - 1, 0].max
+      names.each { |name| seats[name] = down_seats(seats, lower, weights, name, kept) }
+    end
+
+    def down_seats(seats, lower, weights, name, numerator)
+      return seats[name] unless numerator.positive?
+
+      survivors = survivors_above(weights[name].to_i, numerator)
+      [[survivors, lower[name]].max, seats[name]].min
+    end
+
+    def drain_zero_weight_down!(seats, lower, weights, gap)
+      zero_weight_names(seats, weights).sort.reverse_each do |name|
+        take = [seats[name] - lower[name], gap].min
+        next unless take.positive?
+
+        seats[name] -= take
+        gap -= take
+        break if gap.zero?
+      end
+      gap
     end
 
     def normalize_integer_seats(seats, total) = allocate_largest_remainders(seats, 10_000, total)

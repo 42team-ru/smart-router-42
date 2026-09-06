@@ -13,7 +13,7 @@ QUEUE ?= reference/data/operations_queue_10.json
 OUT   ?= out/routing_decisions_test.json
 
 # Уровни синтетического генератора/бенчмарка (lib/synthetic, lib/bench):
-# smoke/s/m/l/xl/insane — см. Synthetic::Levels. gen/bench НЕ входят в check:
+# smoke/s/m/l/l_oracle/xl/insane — см. Synthetic::Levels. gen/bench НЕ входят в check:
 # гейт обязан оставаться быстрым, l/xl/insane — минуты и десятки минут.
 LEVEL   ?= smoke
 SEED    ?= 42
@@ -105,7 +105,7 @@ bench-all:
 
 help:
 	@echo "check test lint fmt validate route determinism no-random install deliver"
-	@echo "gen bench bench-all (LEVEL=smoke|s|m|l|xl|insane, SEED=42)"
+	@echo "gen bench bench-all (LEVEL=smoke|s|m|l|l_oracle|xl|insane, SEED=42)"
 	@echo "openapi-check openapi-embed install-swagger-ui serve"
 
 # HTTP-сервис. Puma workers=1 threads=1 — детерминизм гарантирован конструкцией.

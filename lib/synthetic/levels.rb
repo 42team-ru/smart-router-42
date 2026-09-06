@@ -42,6 +42,19 @@ module Synthetic
       'l' => { operations: 1_000_000, providers: 50, profile: 'fallback_heavy',
                amount_min: 1, amount_max: 10_000_000, mode: :jsonl,
                full_cli: false, exact_cap: 20_000, broken_ratio: 0.0, run_oracle: false },
+      # Тот же масштаб и профиль, что у l, но очередь в памяти (:array) —
+      # единственный способ посчитать на миллионе офлайн-эталон: оракулу нужны
+      # вся очередь и все назначения целиком, а ради отказа от этого потоковый
+      # режим и сделан (Bench::Runner гасит эталон при mode != :array).
+      #
+      # Эталон сам не включается — 1 000 000 больше ORACLE_AUTO_MAX_OPS, — и
+      # это не формальность: на 100 000 операций замер дал 29 с и 582 МБ RSS,
+      # здесь на порядок больше заявок и вдвое с половиной больше провайдеров.
+      # Включается явно: make bench LEVEL=l_oracle ORACLE=1.
+      'l_oracle' => { operations: 1_000_000, providers: 50, profile: 'fallback_heavy',
+                      amount_min: 1, amount_max: 10_000_000, mode: :array,
+                      full_cli: false, exact_cap: 20_000, broken_ratio: 0.0,
+                      run_oracle: true },
       'xl' => { operations: 5_000_000, providers: 200, profile: 'pathological',
                 amount_min: 1, amount_max: 1_000_000_000, mode: :jsonl,
                 full_cli: false, exact_cap: 20_000, broken_ratio: 0.0002, run_oracle: false },

@@ -123,7 +123,11 @@ RSpec.describe 'bin/route' do
 
   it 'выбирает эталонных провайдеров, включая op_103/op_104 (reference_decisions.json)' do
     Dir.mktmpdir do |tmp|
-      run_route(queue_path, '--out-dir', tmp)
+      # Явный --outcomes deterministic: боевой конфиг сдаёт always_ok по
+      # указанию организаторов (docs/RUNBOOK.md §2), а эталон организаторов
+      # описывает именно поведение под моделью исходов — таймаут на op_103 и
+      # каскад, который на нём же и останавливается.
+      run_route(queue_path, '--out-dir', tmp, '--outcomes', 'deterministic', '--seed', '42')
       decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
       selected = decisions.to_h do |decision|
         [decision['operation_id'], decision['selected_provider']]
@@ -182,8 +186,21 @@ RSpec.describe 'bin/route' do
       source.sub(/\ncomparison:.*\z/m, "\n")
     end
 
+    # Боевой конфиг сдаёт always_ok по указанию организаторов (docs/RUNBOOK.md
+    # §2), но спеки этого блока проверяют МЕХАНИКУ роутинга — каскад, таймауты,
+    # статус-чек, распределение по стратегиям, — а она наблюдаема только под
+    # моделью исходов. Поэтому производные конфиги нормализуются на
+    # deterministic, и контрольные числа ниже остаются осмысленными.
+    # Спек, которому нужен именно always_ok из YAML, ставит его себе сам.
+    def deterministic_outcomes(source)
+      raise 'ключ outcomes.source исчез из config/routing.yml' unless
+        source.include?('source: always_ok')
+
+      source.sub('source: always_ok', 'source: deterministic')
+    end
+
     def config_with(dir, line, replacement)
-      source = File.read(production_config)
+      source = deterministic_outcomes(File.read(production_config))
       raise "строка #{line.inspect} исчезла из config/routing.yml" unless source.include?(line)
 
       path = File.join(dir, 'routing.yml')
@@ -197,7 +214,7 @@ RSpec.describe 'bin/route' do
     end
 
     def config_with_replacements(dir, replacements)
-      source = File.read(production_config)
+      source = deterministic_outcomes(File.read(production_config))
       replacements.each do |line, replacement|
         raise "строка #{line.inspect} исчезла из config/routing.yml" unless source.include?(line)
 
@@ -333,9 +350,24 @@ RSpec.describe 'bin/route' do
       end
     end
 
+    # Блоки объявляет сам спек: из боевого конфига они убраны как дубль
+    # data/providers.json, где daily_turnover_min/max и
+    # requests_per_minute_limit уже проставлены. Предупреждение при этом
+    # остаётся частью контракта CLI — его и проверяем.
     it 'на пристинном снапшоте организаторов предупреждает и про rate_limits, и про obligations' do
       Dir.mktmpdir do |tmp|
-        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp,
+        overrides = <<~YAML
+          obligations:
+            payflow: { daily_turnover_min: 2000000 }
+            vipay: { daily_turnover_max: 5000000 }
+          rate_limits:
+            vipay: 7
+            payflow: 10
+            quickpay: 15
+        YAML
+        config = config_with(tmp, 'fallback_provider: spacepayments',
+                             "#{overrides}\nfallback_provider: spacepayments")
+        _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config,
                                             '--providers', reference_path('providers.json'))
 
         expect(status.exitstatus).to eq(0)
@@ -553,7 +585,10 @@ RSpec.describe 'bin/route' do
 
       it 'включён по умолчанию и несёт осмысленную секцию в отчёте (не заглушку)' do
         Dir.mktmpdir do |tmp|
-          _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
+          # Явный deterministic: под боевым always_ok таймаутов нет вовсе, и
+          # закрывать статус-чеку нечего (см. deterministic_outcomes выше).
+          _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp,
+                                              '--outcomes', 'deterministic', '--seed', '42')
           report = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
           pending = report['pending_resolution']
 
@@ -573,7 +608,8 @@ RSpec.describe 'bin/route' do
 
       it 'не меняет routing_decisions_test.json -- op_103 остаётся expired' do
         Dir.mktmpdir do |tmp|
-          run_route(queue_path, '--out-dir', tmp)
+          run_route(queue_path, '--out-dir', tmp,
+                    '--outcomes', 'deterministic', '--seed', '42')
           decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
           decision = decisions.find { |d| d['operation_id'] == 'op_103' }
 

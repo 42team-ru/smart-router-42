@@ -14,6 +14,7 @@ require_relative '../offline/objective'
 require_relative '../offline/oracle'
 require_relative '../offline/benchmark_block'
 require_relative 'accumulator'
+require_relative 'progress'
 require_relative 'comparator'
 require_relative 'measurement'
 
@@ -29,13 +30,14 @@ module Bench
 
     # rubocop:disable-next Metrics/ParameterLists -- шесть независимых источников входа, как у build_pipeline в bin/route.
     def initialize(providers_path:, queue_path:, config_path:, expectation:, mode:, seed:,
-                   run_oracle: false)
+                   run_oracle: false, progress: Progress::Null.new)
       @providers_path = providers_path
       @queue_path = queue_path
       @config_path = config_path
       @expectation = expectation
       @mode = mode
       @seed = seed
+      @progress = progress
       # Оракулу нужна вся очередь и назначения целиком — на потоковых уровнях
       # (:jsonl) этого нет по построению, там очередь и не помещается в память.
       @run_oracle = run_oracle && mode == :array
@@ -43,6 +45,7 @@ module Bench
 
     # rubocop:disable-next Metrics/MethodLength, Metrics/AbcSize
     def run
+      @progress.stage('загрузка провайдеров и конфига')
       Routing::Strategies.load_all!
       Routing::Layers.load_all!
       providers = Io::ProvidersLoader.load(@providers_path)
@@ -63,13 +66,19 @@ module Bench
         comparator.observe(operation, outcome)
         trace&.push([operation, outcome])
         seen += 1
+        @progress.tick(seen)
       end
       accumulator.queue_errors = queue_errors
       measurement = Measurement.snapshot(started, gc_before)
 
-      Result.new(accumulator: accumulator, report: comparator.finish(accumulator),
+      benchmark = build_benchmark(trace, providers, config, pipeline)
+      @progress.stage('сверка с эталоном очереди')
+      report = comparator.finish(accumulator)
+      @progress.finish_stage
+
+      Result.new(accumulator: accumulator, report: report,
                  measurement: measurement, operations_seen: seen,
-                 benchmark: build_benchmark(trace, providers, config, pipeline))
+                 benchmark: benchmark)
     end
 
     private
@@ -79,9 +88,12 @@ module Bench
     # то же, что в боевом отчёте. На очередях длиннее Oracle::LOCAL_SEARCH_MAX_OPS
     # локальные улучшения отключаются самим оракулом, остаётся жадная оценка:
     # 3 симуляции очереди вместо O(n·m), это и делает уровень m посильным.
+    # Этап объявляется только когда эталон реально считается: строка «офлайн-
+    # эталон» на прогоне без него сбивала бы с толку сильнее, чем её отсутствие.
     def build_benchmark(trace, providers, config, pipeline)
       return nil if trace.nil? || trace.empty?
 
+      @progress.stage("офлайн-эталон по #{trace.size} операциям")
       ours = Offline::Objective.from_pairs(trace, providers: providers)
       bound = build_oracle(trace, providers, config, pipeline, ours)
               .call(Offline::Oracle.online_assignment(trace))
@@ -119,11 +131,19 @@ module Bench
       )
     end
 
+    # Этапы объявляются здесь, а не в run: у потокового и массивного режимов
+    # они разные. В :array очередь сперва целиком читается в память (на
+    # миллионе заявок это 200 МБ JSON и заметные секунды, за которые не
+    # обрабатывается ни одной операции) — молчать об этом значит показывать
+    # «прогон очереди» там, где идёт разбор файла.
     def stream_operations(&)
       if @mode == :jsonl
+        @progress.stage('прогон очереди потоком')
         Io::QueueStreamLoader.each(@queue_path, &).errors.size
       else
+        @progress.stage('чтение очереди в память')
         result = Io::QueueLoader.load(@queue_path)
+        @progress.stage('прогон очереди')
         result.operations.each(&)
         result.errors.size
       end

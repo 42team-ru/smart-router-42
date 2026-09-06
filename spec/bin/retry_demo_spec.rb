@@ -29,7 +29,11 @@ RSpec.describe 'демо ретрая (README §6)' do
 
   it 'seed из README даёт операцию с двумя реальными попытками и next_in_cascade' do
     Dir.mktmpdir do |tmp|
-      _stdout, stderr, status = run_route(queue_path, '--seed', seed.to_s, '--out-dir', tmp)
+      # --outcomes deterministic задаётся явно: боевой конфиг сдаёт always_ok
+      # (docs/RUNBOOK.md §2), под которым ретраев не бывает по построению, а
+      # README-демо показывает именно каскад под моделью исходов.
+      _stdout, stderr, status = run_route(queue_path, '--outcomes', 'deterministic',
+                                          '--seed', seed.to_s, '--out-dir', tmp)
       decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
       eligible = JSON.parse(
         File.read(reference_path('reference_decisions.json'))

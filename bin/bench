@@ -20,6 +20,7 @@ require_relative '../lib/synthetic/levels'
 require_relative '../lib/synthetic/writer'
 require_relative '../lib/bench/runner'
 require_relative '../lib/bench/measurement'
+require_relative '../lib/bench/progress'
 
 DEFAULT_CONFIG = File.expand_path('../config/bench.yml', __dir__)
 
@@ -43,6 +44,9 @@ def add_options(opts, options)
   opts.on('--level LEVEL', 'Имя уровня нагрузки') { |v| options[:level] = v }
   opts.on('--seed SEED', 'Seed (по умолчанию 42)') { |v| options[:seed] = v }
   add_path_options(opts, options)
+  opts.on('--[no-]progress', 'Ход выполнения по этапам на STDERR (по умолчанию включён)') do |v|
+    options[:progress] = v
+  end
   opts.on('--[no-]oracle', 'Считать офлайн-эталон (competitive_ratio)') do |v|
     options[:oracle] = v
   end
@@ -81,13 +85,31 @@ rescue OptionParser::ParseError => e
   fail_with("Ошибка разбора аргументов: #{e.message}\n#{usage}")
 end
 
-def ensure_input(level, dir, seed)
+# Пустой каталог и каталог с огрызком прошлой генерации — разные ситуации, и
+# путать их нельзя: во втором случае человек обязан увидеть, что его файлы
+# перезаписывают, а не гадать, почему прогон вдруг занял лишние минуты.
+def input_generation_note(dir, level, seed, partial)
+  suffix = "(level=#{level.name}, seed=#{seed})"
+  return "генерация входа в #{dir} #{suffix}" if partial.empty?
+
+  names = partial.map { |path| File.basename(path) }.join(', ')
+  "в #{dir} неполный вход (#{names}), генерирую целиком #{suffix}"
+end
+
+def ensure_input(level, dir, seed, progress = Bench::Progress::Null.new)
   queue_path = File.join(dir, Synthetic::Writer.queue_filename(level))
   providers_path = File.join(dir, Synthetic::Writer::PROVIDERS_FILENAME)
   expectation_path = File.join(dir, Synthetic::Writer::EXPECTATION_FILENAME)
-  return [providers_path, queue_path, expectation_path] if File.exist?(queue_path)
+  # Проверяются ВСЕ три файла, а не только очередь. Генерация пишет их по
+  # очереди, и прерывание на полуслове (Ctrl-C, OOM, кончился диск) оставляет
+  # каталог с одной обрезанной queue.json. Проверка по одному файлу считала
+  # такой каталог готовым, повторный запуск генерацию пропускал и падал уже на
+  # чтении expectation.json — с сообщением про отсутствующий файл, которое ничего
+  # не объясняет. Чинилось это только ручным rm, о котором надо догадаться.
+  ready = [queue_path, providers_path, expectation_path]
+  return [providers_path, queue_path, expectation_path] if ready.all? { |path| File.exist?(path) }
 
-  puts "Вход не найден в #{dir}, генерирую (level=#{level.name}, seed=#{seed})..."
+  progress.stage(input_generation_note(dir, level, seed, ready.select { |path| File.exist?(path) }))
   result = Synthetic::Writer.write(level_name: level.name, seed: seed, out_dir: dir)
   [result[:providers_path], result[:queue_path], result[:expectation_path]]
 end
@@ -217,18 +239,28 @@ def oracle_enabled?(options, level)
   level.run_oracle && level.operations <= ORACLE_AUTO_MAX_OPS
 end
 
-def build_runner(options, level)
+# Прогресс включён по умолчанию: уровни от m и выше идут минутами, и молчащий
+# процесс неотличим от зависшего. Гасится --no-progress.
+def build_progress(options, level)
+  return Bench::Progress::Null.new if options[:progress] == false
+
+  Bench::Progress.new(io: $stderr, total: level.operations)
+end
+
+def build_runner(options, level, progress)
   providers_path, queue_path, expectation_path = ensure_input(level, options[:dir_resolved],
-                                                              options[:seed])
+                                                              options[:seed], progress)
+  progress.stage('чтение эталона очереди')
   expectation = JSON.parse(File.read(expectation_path))
   Bench::Runner.new(providers_path: providers_path, queue_path: queue_path,
                     config_path: options[:config], expectation: expectation,
                     mode: level.mode, seed: options[:seed],
-                    run_oracle: oracle_enabled?(options, level))
+                    run_oracle: oracle_enabled?(options, level), progress: progress)
 end
 
 def run_level(options, level)
-  result = build_runner(options, level).run
+  progress = build_progress(options, level)
+  result = build_runner(options, level, progress).run
   print_report(result, level)
   write_analytics(result.accumulator, options[:dir_resolved], level, result.benchmark)
   result
