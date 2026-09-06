@@ -105,9 +105,13 @@ bin/route <queue.json>
 | `Margin` | `provider_margin > merchant_margin` без `allow_negative_agreement` | `negative_margin` |
 | `Requisites` | `available_requisites == 0` | `no_requisites` |
 
-Названия причин взяты дословно из `reference/data/reference_decisions.json` —
-валидатор организаторов сверяет их посимвольно. Список зафиксирован в
-`Routing::Reasons::SKIP`.
+Названия причин взяты дословно из `reference/data/reference_decisions.json` и
+зафиксированы в `Routing::Reasons::SKIP`.
+
+Оговорка, чтобы не переоценивать это требование: валидатор организаторов
+названия причин **не сверяет**. `validate_10.rb:191-201` проверяет только, что
+провайдер действительно оказался `skipped`, а саму причину печатает как есть,
+не сравнивая со своей.
 
 Каждая проверка — отдельный файл с одним методом `violation`, возвращающим
 `nil` или `Routing::Violation`. Добавить ограничение — добавить файл и строку

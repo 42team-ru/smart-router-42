@@ -49,22 +49,26 @@ module Reporting
     # kwargs получают отчёт прежней формы.
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
     def self.build(pairs, providers:, history: EMPTY_HISTORY, strategy: nil, benchmark: nil,
-                   comparison: nil, pending_resolution: nil)
+                   comparison: nil, pending_resolution: nil, report_sections: {})
       operations = pairs.map(&:first)
       outcomes = pairs.map(&:last)
 
       report = header(operations, strategy)
                .merge(sections(pairs, outcomes, providers, history, benchmark))
       report = report.merge('comparison' => comparison) unless comparison.nil?
-      pending_resolution.nil? ? report : report.merge('pending_resolution' => pending_resolution)
+      unless pending_resolution.nil?
+        report = report.merge('pending_resolution' => pending_resolution)
+      end
+      report.merge(report_sections)
     end
 
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
     def self.write(path, pairs, providers:, history: EMPTY_HISTORY, strategy: nil, benchmark: nil,
-                   comparison: nil, pending_resolution: nil)
+                   comparison: nil, pending_resolution: nil, report_sections: {})
       report = build(pairs, providers: providers, history: history, strategy: strategy,
                             benchmark: benchmark, comparison: comparison,
-                            pending_resolution: pending_resolution)
+                            pending_resolution: pending_resolution,
+                            report_sections: report_sections)
       File.write(path, "#{JSON.pretty_generate(report)}\n")
     end
 

@@ -34,6 +34,7 @@ module Io
   # (scripts/check_determinism.sh и общий инвариант проекта), а сглаживание по
   # природе своей дробное. В базисные пункты (approved_bp/rejected_bp/
   # expired_bp) переводим только на выходе, округляя Rational#round.
+  # rubocop:disable-next Metrics/ModuleLength -- разбор CSV и единая калибровка неразделимы по контракту.
   module HistoryLoader
     STATUSES = %i[approved rejected expired].freeze
     BASIS_POINTS = 10_000
@@ -43,12 +44,14 @@ module Io
     # всё равно считается (нужен для отображения), но не участвует в
     # approved_bp/rejected_bp/expired_bp.
     def self.load(path, smoothing: true)
-      build_stats(tally(path), smoothing: smoothing)
+      rows = []
+      each_row(path) { |row| rows << row }
+      build_stats(tally(rows), smoothing: smoothing, rows: rows)
     end
 
-    def self.tally(path)
+    def self.tally(rows)
       counts = Hash.new { |hash, name| hash[name] = Hash.new(0) }
-      each_row(path) { |row| tally_row(counts, row) }
+      rows.each { |row| tally_row(counts, row) }
       counts
     end
     private_class_method :tally
@@ -56,24 +59,27 @@ module Io
     def self.tally_row(counts, row)
       payment_system = row['payment_system']
       status = row['status']
-      validate_status!(payment_system, status)
+      return unless valid_status?(status)
+
       counts[payment_system][status.to_sym] += 1
     end
     private_class_method :tally_row
 
-    def self.validate_status!(payment_system, status)
-      return if STATUSES.map(&:to_s).include?(status)
-
-      raise "operations_history.csv: неизвестный статус #{status.inspect} " \
-            "у #{payment_system.inspect}; допустимы #{STATUSES.join(', ')}"
+    def self.valid_status?(status)
+      STATUSES.map(&:to_s).include?(status)
     end
-    private_class_method :validate_status!
+    private_class_method :valid_status?
 
-    def self.build_stats(counts, smoothing:)
+    # rubocop:disable Metrics/MethodLength -- создание статистики и диагностики обязано читать один набор строк.
+    def self.build_stats(counts, smoothing:, rows: [])
       totals = totals_by_provider(counts)
       total_obs = totals.values.sum
+      diagnostics = build_diagnostics(rows)
 
-      return Io::HistoryStats.new(entries: {}, k: 0, smoothed: smoothing) if total_obs.zero?
+      if total_obs.zero?
+        return Io::HistoryStats.new(entries: {}, k: 0, smoothed: smoothing, rows: rows,
+                                    diagnostics: diagnostics)
+      end
 
       pooled = pooled_shares(counts, total_obs)
       k_value = k_from_moments(counts, totals, pooled.fetch(:approved))
@@ -81,9 +87,29 @@ module Io
         [name,
          build_entry(outcome_counts, totals.fetch(name), pooled, k_value, smoothing: smoothing)]
       end
-      Io::HistoryStats.new(entries: entries, k: k_value, smoothed: smoothing)
+      Io::HistoryStats.new(entries: entries, k: k_value, smoothed: smoothing, rows: rows,
+                           diagnostics: diagnostics)
     end
     private_class_method :build_stats
+    # rubocop:enable Metrics/MethodLength
+
+    def self.build_diagnostics(rows)
+      {
+        'rows' => rows.size,
+        'unparsable_latency' => rows.count { |row| parse_latency(row['latency_sec']).nil? },
+        'unknown_result' => rows.count { |row| !valid_status?(row['status']) },
+        'providers_seen' => rows.filter_map { |row| row['payment_system'] }.uniq.sort
+      }
+    end
+    private_class_method :build_diagnostics
+
+    def self.parse_latency(value)
+      return value if value.is_a?(Integer) && value >= 0
+      return nil unless value.to_s.match?(/\A\d+\z/)
+
+      value.to_i
+    end
+    private_class_method :parse_latency
 
     def self.totals_by_provider(counts)
       counts.transform_values { |outcome_counts| outcome_counts.values.sum }
@@ -168,6 +194,8 @@ module Io
     private_class_method :smoothed_share
 
     def self.each_row(path, &)
+      return CSV.foreach(path, headers: true) unless block_given?
+
       CSV.foreach(path, headers: true, &)
     rescue Errno::ENOENT
       raise "Файл истории операций не найден: #{path}"

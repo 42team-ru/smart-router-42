@@ -41,7 +41,7 @@ module Io
       expired_bp: DEFAULT_EXPIRED_BP
     ).freeze
 
-    attr_reader :k
+    attr_reader :k, :rows, :diagnostics
 
     # entries: Hash{String имя провайдера => Entry}. k: Rational, эффективный
     # размер приора Дирихле (см. HistoryLoader.k_from_moments) — 0, если
@@ -54,10 +54,12 @@ module Io
     # обозначением приора Дирихле по всему пакету (HistoryLoader, Conversion,
     # Recommendations); переименование ради линтера рассинхронизировало бы
     # код с комментариями и контрольными числами брифа.
-    def initialize(entries:, k:, smoothed:)
+    def initialize(entries:, k:, smoothed:, rows: [], diagnostics: {})
       @entries = entries
       @k = k
       @smoothed = smoothed
+      @rows = rows
+      @diagnostics = diagnostics
     end
 
     def smoothed? = @smoothed
@@ -69,6 +71,10 @@ module Io
     def observations(name) = entry(name).n
 
     def approved_count(name) = entry(name).approved_count
+
+    def rejected_count(name) = entry(name).rejected_count
+
+    def expired_count(name) = entry(name).expired_count
 
     def approved_bp(name) = entry(name).approved_bp
 

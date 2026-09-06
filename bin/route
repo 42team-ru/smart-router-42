@@ -56,6 +56,11 @@ require_relative '../lib/reporting/report_builder'
 require_relative '../lib/reporting/utilization'
 require_relative '../lib/reporting/pending_resolution_summary'
 require_relative '../lib/reporting/console_summary'
+require_relative '../lib/reporting/outcome_distribution'
+require_relative '../lib/reporting/latency_profile'
+require_relative '../lib/reporting/queue_coverage'
+require_relative '../lib/reporting/input_diagnostics'
+require_relative '../lib/reporting/amount_bands'
 require_relative '../lib/offline/objective'
 require_relative '../lib/offline/oracle'
 require_relative '../lib/offline/benchmark_block'
@@ -206,7 +211,7 @@ end
 def load_queue(path)
   result = Io::QueueLoader.load(path)
   result.errors.each { |error| warn "очередь: #{error}" }
-  result.operations
+  result
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -387,7 +392,7 @@ end
 
 # rubocop:disable-next Metrics/ParameterLists -- сформированные секции отчёта передаются явно.
 def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, comparison: nil,
-                  pending_resolution: nil)
+                  pending_resolution: nil, report_sections: {})
   FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
@@ -396,7 +401,7 @@ def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, 
   Reporting::ReportBuilder.write(
     report_path, pairs, providers: providers, history: history, strategy: strategy.name,
                         benchmark: benchmark, comparison: comparison,
-                        pending_resolution: pending_resolution
+                        pending_resolution: pending_resolution, report_sections: report_sections
   )
 
   [decisions_path, report_path]
@@ -547,13 +552,31 @@ def load_inputs(options)
   history = load_history(options[:history_path] || config.history_path, config)
   {
     providers: providers,
-    operations: load_queue(options[:queue_path]),
+    queue: load_queue(options[:queue_path]),
     history: history,
     config: config,
     layers: build_layers(config),
     strategy: build_strategy(config, options[:strategy], history),
     selector: build_selector(config, options[:strategy], history)
   }
+end
+
+# Секции строятся у границы пайплайна: здесь доступны исходные загрузчики,
+# тогда как ReportBuilder только собирает уже готовые данные в стабильный JSON.
+# rubocop:disable-next Metrics/AbcSize -- секции собираются явно в одном месте границы пайплайна.
+def build_report_sections(pairs, inputs, history_path)
+  # В отчёте достаточно имени файла: абсолютный путь флага не должен менять
+  # содержимое при ссылке на ту же историю из конфигурации.
+  source = File.basename(history_path || inputs[:config].history_path)
+  sections = {
+    'outcome_distribution' => Reporting::OutcomeDistribution.build(inputs[:history], source),
+    'queue_coverage' => Reporting::QueueCoverage.build(inputs[:queue], pairs),
+    'input_diagnostics' => Reporting::InputDiagnostics.build(inputs[:queue], inputs[:history],
+                                                             inputs[:providers]),
+    'amount_bands' => Reporting::AmountBands.build(pairs, inputs[:history])
+  }
+  latency = Reporting::LatencyProfile.build(inputs[:history], source)
+  latency.nil? ? sections : sections.merge('latency_profile' => latency)
 end
 
 # Гейт для дорогой офлайн-аналитики целиком (см. offline_analytics_enabled?).
@@ -576,12 +599,14 @@ def main(argv)
   options = parse_args(argv)
   inputs = load_inputs(options)
 
+  inputs[:operations] = inputs[:queue].operations
   pairs, outcomes, state = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
   pending_resolution = maybe_build_pending_resolution(pairs, state, outcomes, inputs)
   benchmark, comparison = build_offline_analytics(pairs, inputs, outcomes, options)
   decisions_path, report_path = write_outputs(
     options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy],
-    benchmark: benchmark, comparison: comparison, pending_resolution: pending_resolution
+    benchmark: benchmark, comparison: comparison, pending_resolution: pending_resolution,
+    report_sections: build_report_sections(pairs, inputs, options[:history_path])
   )
 
   print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution)
@@ -603,7 +628,8 @@ def print_console_summary(pairs, inputs, benchmark, comparison, pending_resoluti
   report = Reporting::ReportBuilder.build(
     pairs, providers: inputs[:providers], history: inputs[:history],
            strategy: inputs[:strategy].name, benchmark: benchmark, comparison: comparison,
-           pending_resolution: pending_resolution
+           pending_resolution: pending_resolution,
+           report_sections: build_report_sections(pairs, inputs, nil)
   )
 
   Reporting::ConsoleSummary.operation_lines(pairs).each { |line| puts line }
