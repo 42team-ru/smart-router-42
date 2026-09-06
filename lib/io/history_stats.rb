@@ -50,7 +50,7 @@ module Io
     # к approved_bp/rejected_bp/expired_bp в этом конкретном объекте — при
     # outcomes.smoothing: false k всё равно посчитан (для отображения), но не
     # применён.
-    # rubocop:disable-next Naming/MethodParameterName -- k совпадает с
+    # rubocop:disable-next Naming/MethodParameterName, Metrics/ParameterLists -- k совпадает с
     # обозначением приора Дирихле по всему пакету (HistoryLoader, Conversion,
     # Recommendations); переименование ради линтера рассинхронизировало бы
     # код с комментариями и контрольными числами брифа.

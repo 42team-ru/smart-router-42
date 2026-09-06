@@ -203,9 +203,12 @@ module Io
     end
     private_class_method :each_row
 
+    # Один проход намеренно строит все три исхода каждого банка из общей выборки.
+    # rubocop:disable-next Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
     def self.build_bank_entries(rows, provider_entries, k_value, smoothing)
       grouped = rows.select { |row| valid_status?(row['status']) && row['bank'] }
                     .group_by { |row| [row['payment_system'], row['bank']] }
+      # rubocop:disable-next Metrics/BlockLength -- считаем все три статуса одного банка в одном атомарном блоке.
       grouped.to_h do |key, bank_rows|
         counts = STATUSES.to_h do |status|
           [status, bank_rows.count { |row| row['status'] == status.to_s }]
@@ -215,12 +218,25 @@ module Io
         bp = STATUSES.to_h do |status|
           raw = counts.fetch(status)
           prior_share = Rational(prior.public_send("#{status}_bp"), BASIS_POINTS)
-          share = smoothing ? (Rational(raw) + (prior_share * k_value)) / (n + k_value) : Rational(raw, n)
+          share = if smoothing
+                    (Rational(raw) + (prior_share * k_value)) / (n + k_value)
+                  else
+                    Rational(
+                      raw, n
+                    )
+                  end
           [status, (share * BASIS_POINTS).round]
         end
-        [key, Io::HistoryStats::Entry.new(n: n, approved_count: counts[:approved],
-                                          rejected_count: counts[:rejected], expired_count: counts[:expired],
-                                          approved_bp: bp[:approved], rejected_bp: bp[:rejected], expired_bp: bp[:expired])]
+        entry = Io::HistoryStats::Entry.new(
+          n: n,
+          approved_count: counts[:approved],
+          rejected_count: counts[:rejected],
+          expired_count: counts[:expired],
+          approved_bp: bp[:approved],
+          rejected_bp: bp[:rejected],
+          expired_bp: bp[:expired]
+        )
+        [key, entry]
       end
     end
     private_class_method :build_bank_entries

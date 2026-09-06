@@ -6,19 +6,27 @@ require_relative '../offline/comparison'
 module Reporting
   # Проверяем совет тем же онлайн-проходом, но на независимом состоянии.
   module RecommendationEffect
+    # rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength -- расчёт до/после остаётся явным для аудита.
     def self.build(pairs, operations:, providers:, config:, history:)
       recommendations = Recommendations.build_detailed(pairs, providers, history)
       applicable = recommendations.select { |item| item['provider'] && item['suggested'] }
-      return { 'applied' => [], 'note' => 'применимых параметрических рекомендаций нет' } if applicable.empty?
+      if applicable.empty?
+        return { 'applied' => [],
+                 'note' => 'применимых параметрических рекомендаций нет' }
+      end
 
       changed = apply(providers, applicable)
       before = Offline::Comparison.evaluate(operations: operations, providers: providers,
                                             config: config, history: history)
       after = Offline::Comparison.evaluate(operations: operations, providers: changed,
                                            config: config, history: history)
-      { 'applied' => applicable.map { |item| item.slice('code', 'provider', 'param', 'current', 'suggested') },
+      { 'applied' => applicable.map do |item|
+        item.slice('code', 'provider', 'param', 'current', 'suggested')
+      end,
         'before' => before, 'after' => after,
-        'delta_max_deviation_pp' => (after['max_deviation_pp'] - before['max_deviation_pp']).round(1),
+        'delta_max_deviation_pp' => (
+          after['max_deviation_pp'] - before['max_deviation_pp']
+        ).round(1),
         'delta_delivered' => after['delivered'] - before['delivered'],
         'note' => Offline::Comparison::NOTE }
     rescue ArgumentError => e
@@ -26,7 +34,9 @@ module Reporting
     end
 
     def self.apply(providers, recommendations)
-      changes = recommendations.to_h { |item| [[item['provider'], item['param']], item['suggested']] }
+      changes = recommendations.to_h do |item|
+        [[item['provider'], item['param']], item['suggested']]
+      end
       providers.map do |provider|
         attributes = changes.each_with_object({}) do |((name, param), value), result|
           result[param.to_sym] = value if name == provider.name
@@ -34,6 +44,7 @@ module Reporting
         attributes.empty? ? provider : provider.with(**attributes)
       end
     end
+
     private_class_method :apply
   end
 end
