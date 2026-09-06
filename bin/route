@@ -634,14 +634,7 @@ def main(argv)
   puts "Записано: #{report_path}"
 end
 
-# Report строится второй раз намеренно -- .write (в write_outputs) уже
-# построил и отбросил свой экземпляр. Дорогая часть (офлайн-оракул и
-# офлайн-сравнение) в benchmark/comparison уже посчитана один раз в
-# build_benchmark/build_comparison и передаётся сюда готовыми хешами,
-# повторно не считается -- пересчитывается только дешёвая часть
-# (distribution/achievable/deviation_causes/recommendations). pending_resolution
-# тоже готовый хеш (или nil, когда второй проход выключен) -- второй проход
-# по held-резервам здесь не повторяется, он мутировал state один раз в main.
+# Дорогие benchmark, comparison и pending_resolution уже переданы готовыми.
 # rubocop:disable-next Metrics/MethodLength, Metrics/ParameterLists -- CLI boundary passes completed pipeline values explicitly.
 def print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution, options)
   report = Reporting::ReportBuilder.build(

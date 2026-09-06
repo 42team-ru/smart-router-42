@@ -43,17 +43,8 @@ module Io
 
     attr_reader :k, :rows, :diagnostics
 
-    # entries: Hash{String имя провайдера => Entry}. k: Rational, эффективный
-    # размер приора Дирихле (см. HistoryLoader.k_from_moments) — 0, если
-    # разброса между провайдерами посчитать не из чего (0 или 1 провайдер в
-    # истории), даже когда smoothed? true. smoothed: применялось ли сглаживание
-    # к approved_bp/rejected_bp/expired_bp в этом конкретном объекте — при
-    # outcomes.smoothing: false k всё равно посчитан (для отображения), но не
-    # применён.
-    # rubocop:disable-next Naming/MethodParameterName, Metrics/ParameterLists -- k совпадает с
-    # обозначением приора Дирихле по всему пакету (HistoryLoader, Conversion,
-    # Recommendations); переименование ради линтера рассинхронизировало бы
-    # код с комментариями и контрольными числами брифа.
+    # k — эффективный размер приора; smoothed отмечает применённое сглаживание.
+    # rubocop:disable-next Naming/MethodParameterName, Metrics/ParameterLists -- k — термин модели.
     def initialize(entries:, k:, smoothed:, rows: [], diagnostics: {}, bank_entries: {})
       @entries = entries
       @k = k

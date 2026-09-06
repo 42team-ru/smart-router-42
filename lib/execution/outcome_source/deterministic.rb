@@ -5,12 +5,7 @@ require_relative 'base'
 
 module Execution
   module OutcomeSource
-    # Детерминированный источник исходов: хеш от seed и идентификаторов вместо
-    # генератора псевдослучайных чисел. Два прогона одного входа обязаны дать
-    # побайтово одинаковый вывод — источники недетерминизма в решающем пути
-    # запрещены (греп в CI, см. scripts/check_determinism.sh).
-    #
-    # Формула:
+    # Исход определяется хешем seed, операции, провайдера и номера попытки.
     #   roll = SHA256("seed:op_id:name:attempt_no").to_i(16) % 10_000
     #   approved_bp/rejected_bp — целые базисные пункты на провайдера (см.
     #   outcome_table ниже)
@@ -18,38 +13,14 @@ module Execution
     #   roll < approved_bp + rejected_bp           -> :rejected
     #   иначе                                      -> :expired
     #
-    # outcome_table — Hash{имя провайдера => {approved_bp:, rejected_bp:}},
-    # уже готовые целые базисные пункты. Раньше был один reject_share (доля
-    # отказов) на ВСЕХ провайдеров сразу, будто бы "доля отказов среди
-    # неодобренных" — на деле же он просто прибавлялся к approved-порогу поверх
-    # общей шкалы 0..10_000, то есть был абсолютным, а не относительным, и
-    # одинаковым для vipay/quickpay/payflow при том, что история по ним
-    # совершенно разная (см. Io::HistoryLoader). Теперь approved_bp и
-    # rejected_bp приходят пер-провайдерно — из сглаженной истории при
-    # outcomes.calibrate_from_history: true (bin/route строит outcome_table из
-    # Io::HistoryStats#to_outcome_table) или из паспортного conversion_24h с
-    # прежним запасным reject 5% при false (см. .passport_outcome_table ниже) —
-    # сборка таблицы остаётся на стороне вызывающего кода (bin/route,
-    # lib/api/gateway.rb, lib/offline/comparison.rb), сам источник данные не
-    # добывает и диска не касается.
-    #
-    # Формула по-прежнему чистая функция от (seed, operation_id, provider,
-    # attempt_no) — никакой памяти между вызовами.
+    # outcome_table содержит пороги approved/rejected в базисных пунктах.
     class Deterministic < Base
       BASIS_POINTS = 10_000
 
-      # Провайдера нет в outcome_table вовсе (например, синтетический
-      # провайдер в спеке каскада, которому забыли завести историю) — тот же
-      # осознанный дефолт, что и в Io::HistoryStats: без всяких данных
-      # провайдер никогда не одобряется, 5% уходит в rejected (тот самый
-      # прежний reject_share=500, перенесённый сюда как именованная
-      # константа), остальное — expired.
+      # Для неизвестного провайдера: 5% rejected, остальное expired.
       DEFAULT_OUTCOME = { approved_bp: 0, rejected_bp: 500 }.freeze
 
-      # Запасной rejected_bp для паспортного режима (outcomes.calibrate_from_history:
-      # false) — сохраняет прежнее поведение источника (approved строго по
-      # conversion_24h, 5% неодобренных уходит в rejected) буквально, без
-      # привязки к истории вовсе.
+      # В паспортном режиме 5% неодобренных операций считаются rejected.
       PASSPORT_REJECTED_BP = 500
 
       def initialize(seed:, outcome_table:)

@@ -177,21 +177,12 @@ RSpec.describe 'bin/route' do
   describe 'конфигурация' do
     let(:production_config) { File.expand_path('../../config/routing.yml', __dir__) }
 
-    # comparison требует, чтобы один из вариантов буквально совпадал с боевыми
-    # strategy/layers (иначе SchemaError -- "таблица без опоры на фактический
-    # прогон бессмысленна"). Тесты этого
-    # хелпера меняют strategy/layers ради ДРУГИХ проверок и не обязаны держать
-    # comparison согласованным с новым значением, поэтому секция обрезается.
+    # Временные конфиги меняют strategy/layers, поэтому comparison удаляется.
     def strip_comparison(source)
       source.sub(/\ncomparison:.*\z/m, "\n")
     end
 
-    # Боевой конфиг сдаёт always_ok по указанию организаторов (docs/RUNBOOK.md
-    # §2), но спеки этого блока проверяют МЕХАНИКУ роутинга — каскад, таймауты,
-    # статус-чек, распределение по стратегиям, — а она наблюдаема только под
-    # моделью исходов. Поэтому производные конфиги нормализуются на
-    # deterministic, и контрольные числа ниже остаются осмысленными.
-    # Спек, которому нужен именно always_ok из YAML, ставит его себе сам.
+    # Производные конфиги используют deterministic для проверяемых исходов.
     def deterministic_outcomes(source)
       raise 'ключ outcomes.source исчез из config/routing.yml' unless
         source.include?('source: always_ok')
@@ -379,12 +370,7 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    # Режимы каскада доезжают из конфига в Execution::Executor. Проверяем по
-    # наблюдаемому поведению
-    # процесса на подготовленных queue+config, а не заглядывая во внутренности
-    # bin/route. calibrate_from_history: false фиксирует источник конверсий
-    # на conversion_24h из data/providers.json -- иначе исход зависел бы от
-    # истории и результат нельзя было бы предсказать заранее.
+    # Каскад проверяется через CLI с паспортными conversion_24h.
     describe 'cascade' do
       def write_queue(dir, operations)
         path = File.join(dir, 'queue.json')
@@ -392,17 +378,7 @@ RSpec.describe 'bin/route' do
         path
       end
 
-      # Заменяет весь блок cascade: целиком -- строки exhausted/on_timeout
-      # встречаются в config/routing.yml дважды (комментарий-документация и
-      # само значение), точечная замена одной строки цепляет комментарий
-      # первым (String#sub берёт первое вхождение), а не реальный YAML-ключ.
-      #
-      # Дефолты kwargs здесь -- как в самом config/routing.yml
-      # (last_candidate/stop, эталон reference_decisions.json/`make validate`):
-      # вызов cascade_config(tmp) без аргументов обязан находить и
-      # (тождественно) переписывать актуальный дефолтный блок файла -- иначе
-      # он не найдёт строку и упадёт с понятной ошибкой
-      # (config_with_replacements), а не молча свалится в другой сценарий.
+      # Замена целого блока не затрагивает одноимённые строки в комментариях.
       def cascade_block(exhausted: 'last_candidate', on_timeout: 'stop')
         "cascade:\n  exhausted: #{exhausted}\n  on_timeout: #{on_timeout}\n"
       end
@@ -414,19 +390,13 @@ RSpec.describe 'bin/route' do
                                         cascade_block => block })
       end
 
-      # test_op_2: единственный допустимый провайдер -- quickpay (bank qiwi не
-      # входит в списки vipay/payflow). seed 42 + conversion_24h quickpay 0.79
-      # дают детерминированный rejected на attempt_no 1 -- подобрано заранее
-      # (SHA256("42:test_op_2:quickpay:1") % 10000 == 7932, порог 7900..8399).
+      # Единственный допустимый провайдер quickpay получает rejected на seed 42.
       def exhausted_operation
         { 'operation_id' => 'test_op_2', 'created_at' => '2026-07-30T09:05:00+03:00',
           'amount' => 5000, 'bank' => 'qiwi', 'card_brand' => nil, 'payout_requisite' => {} }
       end
 
-      # test_op_1: payflow и quickpay допустимы (bank alfa исключает vipay).
-      # Под боевыми layers [share_ceiling, budget_headroom] / tolerance 1000
-      # первым идёт quickpay. seed 42 даёт ему expired (attempt 1), а payflow
-      # approved (attempt 2) -- перемерено по фактическому CLI-прогону.
+      # Quickpay получает expired, а payflow на второй попытке — approved.
       def timeout_operation
         { 'operation_id' => 'test_op_1', 'created_at' => '2026-07-30T09:05:00+03:00',
           'amount' => 2000, 'bank' => 'alfa', 'card_brand' => nil, 'payout_requisite' => {} }
@@ -675,16 +645,8 @@ RSpec.describe 'bin/route' do
       end
     end
 
-    # Эталон лежит в spec/fixtures/regression/, а НЕ в корневом
-    # routing_decisions_test.json. Разница принципиальная: корневой файл --
-    # сдаваемый артефакт, и в час стопкода он будет перегенерирован из боевой
-    # operations_queue_test.json (см. docs/RUNBOOK.md, мина №1). Если сравнивать
-    # с ним, спек в этот момент начнёт сравнивать прогон по публичной очереди с
-    # решениями по боевой и упадёт -- под дедлайном это провоцирует "починить"
-    # его подгонкой сдаваемого файла. Отдельная фикстура развязывает регрессию
-    # кода и содержимое поставки.
-    #
-    # Обновлять фикстуру намеренно, когда поведение изменилось осознанно:
+    # Регрессия использует отдельную фикстуру публичной очереди, а не артефакт сдачи.
+    # Обновлять её следует только при намеренном изменении поведения:
     #   bundle exec bin/route reference/data/operations_queue_10.json --out-dir /tmp/reg
     #   cp /tmp/reg/routing_decisions_test.json spec/fixtures/regression/public_queue_decisions.json
     it 'дефолтный прогон побайтово не меняется (regression)' do
