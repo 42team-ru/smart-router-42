@@ -112,6 +112,15 @@ RSpec.describe Routing::Selector do
     default = run_route(File.expand_path('../../config/routing.yml', __dir__))
     selected = run_route(File.expand_path('../../config/examples/selector.yml', __dir__))
 
+    # "Ошибок: 0" зависит от config/routing.yml#cascade (не мой блок, см.
+    # AGENTS/бриф) -- reference/scripts/validate_10.rb сравнивает только
+    # ДОПУСТИМОСТЬ кандидата, не смоделированный исход; на op_103/op_104
+    # единственный допустимый кандидат (quickpay) отвечает таймаутом на seed
+    # 42, и если cascade.on_timeout когда-нибудь снова уйдёт в continue,
+    # каскад подключит spacepayments, а наивный валидатор это ошибочно
+    # пометит -- тот же эффект будет и на `make validate`, не специфика
+    # selector.yml. Сейчас (on_timeout: stop) quickpay остаётся выбранным
+    # (просто с result: expired), и валидатор доволен.
     expect(selected.fetch(:validation)).to include('Ошибок:   0')
     expect(selected.fetch(:decisions).map { |item| item['selected_provider'] })
       .not_to eq(default.fetch(:decisions).map { |item| item['selected_provider'] })

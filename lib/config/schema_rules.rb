@@ -150,6 +150,21 @@ module Config
 
       validate_outcome_source!(outcomes)
       validate_outcome_script!(outcomes)
+      validate_outcome_smoothing!(outcomes)
+    end
+
+    # outcomes.smoothing — включает/выключает Дирихле-сглаживание истории
+    # (Io::HistoryLoader). Отсутствующий ключ — законный вход (дефолт true
+    # подставляется на стороне сборки, не здесь, как и остальные outcomes.*);
+    # значение, которое не true и не false, молча не пропускаем — иначе
+    # опечатка (например строка "false") тихо включила бы сглаживание.
+    def self.validate_outcome_smoothing!(outcomes)
+      return unless outcomes.key?('smoothing')
+
+      value = outcomes['smoothing']
+      return if [true, false].include?(value)
+
+      raise SchemaError, "outcomes.smoothing должен быть true или false, получено: #{value.inspect}"
     end
 
     def self.validate_outcome_source!(outcomes)
@@ -297,6 +312,91 @@ module Config
                          "(strategy=#{strategy.inspect}, layers=#{layers.inspect})"
     end
 
+    # Порог размера очереди для офлайн-аналитики bin/route (оракул +
+    # сравнение конфигураций, lib/offline/*) -- дорогая часть, которая не
+    # влияет ни на одно решение (см. комментарий у OFFLINE_ANALYTICS_MAX_OPS_DEFAULT
+    # в bin/route). Отсутствующий ключ `offline_analytics` целиком и
+    # отсутствующий подключ max_operations -- законный вход, дефолт
+    # подставляется на стороне сборки (bin/route), не здесь -- как cascade
+    # выше.
+    OFFLINE_ANALYTICS_KEYS = %w[max_operations].freeze
+
+    def self.validate_offline_analytics!(value)
+      return if value.nil?
+
+      unless value.is_a?(Hash)
+        raise SchemaError,
+              "Ключ `offline_analytics` должен быть отображением, получено: #{value.class}"
+      end
+
+      validate_offline_analytics_keys!(value)
+      validate_offline_analytics_max_operations!(value)
+    end
+
+    def self.validate_offline_analytics_keys!(value)
+      unknown = value.keys.map(&:to_s) - OFFLINE_ANALYTICS_KEYS
+      return if unknown.empty?
+
+      raise SchemaError, "offline_analytics: неизвестный ключ #{unknown.join(', ')}; " \
+                         "допустимые: #{OFFLINE_ANALYTICS_KEYS.join(', ')}"
+    end
+
+    # Ноль запретен так же, как отрицательное число: max_operations: 0 читался
+    # бы как «аналитика никогда не считается», но для этого есть явный
+    # CLI-флаг --no-offline-analytics -- дублировать вырожденным порогом не
+    # нужно, а опечатка (0 вместо, скажем, 10000) не должна тихо выключать
+    # аналитику на любой непустой очереди.
+    def self.validate_offline_analytics_max_operations!(value)
+      return unless value.key?('max_operations')
+
+      max_ops = value['max_operations']
+      return if max_ops.is_a?(Integer) && max_ops.positive?
+
+      raise SchemaError, 'offline_analytics.max_operations должен быть положительным целым ' \
+                         "числом, получено: #{max_ops.inspect}"
+    end
+
+    # Переключатель второго прохода bin/route (Execution::PendingResolutionPass) --
+    # статус-чек по operations, застрявшим в :expired на первом проходе.
+    # Отсутствующий ключ `pending_resolution` целиком и отсутствующий подключ
+    # enabled -- законный вход, дефолт (true, см. комментарий у ключа в
+    # config/routing.yml) подставляется на стороне сборки (bin/route), не
+    # здесь -- как cascade/offline_analytics выше.
+    PENDING_RESOLUTION_KEYS = %w[enabled].freeze
+
+    def self.validate_pending_resolution!(value)
+      return if value.nil?
+
+      unless value.is_a?(Hash)
+        raise SchemaError,
+              "Ключ `pending_resolution` должен быть отображением, получено: #{value.class}"
+      end
+
+      validate_pending_resolution_keys!(value)
+      validate_pending_resolution_enabled!(value)
+    end
+
+    def self.validate_pending_resolution_keys!(value)
+      unknown = value.keys.map(&:to_s) - PENDING_RESOLUTION_KEYS
+      return if unknown.empty?
+
+      raise SchemaError, "pending_resolution: неизвестный ключ #{unknown.join(', ')}; " \
+                         "допустимые: #{PENDING_RESOLUTION_KEYS.join(', ')}"
+    end
+
+    # Как outcomes.smoothing выше: значение, которое не true и не false, не
+    # пропускаем молча -- опечатка (например строка "true") иначе тихо
+    # выключила бы второй проход, а с ним и освобождение зависших holds.
+    def self.validate_pending_resolution_enabled!(value)
+      return unless value.key?('enabled')
+
+      enabled = value['enabled']
+      return if [true, false].include?(enabled)
+
+      raise SchemaError, 'pending_resolution.enabled должен быть true или false, ' \
+                         "получено: #{enabled.inspect}"
+    end
+
     def self.validate_integer!(hash, key, path, allow_nil:)
       value = hash[key]
       return if value.is_a?(Integer)
@@ -313,6 +413,10 @@ module Config
                          :validate_comparison_shape!, :validate_comparison_entries!,
                          :validate_comparison_entry!, :validate_comparison_name!,
                          :validate_comparison_strategy!, :validate_comparison_layers!,
-                         :validate_comparison_names_unique!, :validate_comparison_baseline!
+                         :validate_comparison_names_unique!, :validate_comparison_baseline!,
+                         :validate_offline_analytics_keys!,
+                         :validate_offline_analytics_max_operations!,
+                         :validate_pending_resolution_keys!,
+                         :validate_pending_resolution_enabled!
   end
 end

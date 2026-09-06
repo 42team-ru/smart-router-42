@@ -8,6 +8,7 @@ module Reporting
   # кодируются 'selected' с собственными attempt_no/result (формат
   # attempts заморожен валидатором организаторов), поэтому последняя из них
   # и есть решившая исход операции.
+  # rubocop:disable-next Metrics/ModuleLength -- вывод в консоль собран в одном публичном фасаде.
   module ConsoleSummary
     def self.operation_lines(pairs)
       pairs.map { |operation, outcome| operation_line(operation, outcome) }
@@ -32,12 +33,37 @@ module Reporting
         'Итог (факт / цель / достижимо):',
         *distribution_lines(report),
         '',
-        fallback_line(report),
-        benchmark_line(report),
-        *analytics_lines(report),
+        *outcome_lines(report),
         *comparison_lines(report)
       ]
     end
+
+    def self.outcome_lines(report)
+      [
+        fallback_line(report),
+        benchmark_line(report),
+        *pending_resolution_lines(report),
+        *analytics_lines(report)
+      ]
+    end
+    private_class_method :outcome_lines
+
+    # Второй проход (Execution::PendingResolutionPass) -- секции нет в отчёте
+    # вовсе, когда pending_resolution.enabled: false в конфиге (см. bin/route),
+    # тогда и строки в консоли нет, как у comparison_lines выше.
+    def self.pending_resolution_lines(report)
+      pending = report['pending_resolution']
+      return [] unless pending
+
+      [
+        '',
+        "Статус-чек (второй проход): #{pending['resolved']} разрешено " \
+        "(#{pending['approved']} approved / #{pending['rejected']} rejected), " \
+        "#{pending['still_pending']} всё ещё pending, освобождено " \
+        "#{pending['freed_in_progress_amount']} ₽ ёмкости"
+      ]
+    end
+    private_class_method :pending_resolution_lines
 
     # Офлайн-сравнение вариантов (strategy+layers), только для чтения глазами
     # -- в принятие решений не

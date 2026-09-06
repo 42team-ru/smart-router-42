@@ -27,13 +27,20 @@ RSpec.describe 'bin/route с конфигом AdWords' do
     end
   end
 
+  # fallback_after_cascade (spacepayments поверх исчерпанного каскада,
+  # cascade.exhausted: fallback_provider) не часть порядка, который расставляет
+  # budget_headroom -- это отдельная попытка сверх каскада, не в счёт.
   def payflow_last_or_absent?(decisions, operation_id)
-    selected = decision_for(decisions, operation_id)['attempts'].select do |attempt|
-      attempt['decision'] == 'selected'
-    end
+    selected = cascade_attempts(decisions, operation_id)
     payflow = selected.select { |attempt| attempt['provider'] == 'payflow' }
     selected_attempt_numbers = selected.map { |attempt| attempt['attempt_no'] }.compact
     payflow.empty? || payflow.last['attempt_no'] == selected_attempt_numbers.max
+  end
+
+  def cascade_attempts(decisions, operation_id)
+    decision_for(decisions, operation_id)['attempts'].select do |attempt|
+      attempt['decision'] == 'selected' && attempt['reason'] != 'fallback_after_cascade'
+    end
   end
 
   def decision_for(decisions, operation_id)

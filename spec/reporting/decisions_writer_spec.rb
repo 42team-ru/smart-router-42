@@ -100,6 +100,56 @@ RSpec.describe Reporting::DecisionsWriter do
         expect(File.binread(path_a)).to eq(File.binread(path_b))
       end
     end
+
+    # Пустая очередь -- частный случай, который потоковая склейка "[" +
+    # запятые + "]" обязана не сломать: JSON.pretty_generate([]) даёт "[]"
+    # без единой пустой строки внутри, а не "[\n\n]".
+    it 'на пустой очереди даёт ровно [] и перевод строки' do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'empty.json')
+
+        described_class.write(path, [])
+
+        expect(File.binread(path)).to eq("[]\n")
+      end
+    end
+
+    # Регресс на пакет 3: раньше write собирал JSON.pretty_generate(build(pairs))
+    # одной строкой в памяти, теперь пишет потоком по одному решению. Обе
+    # стратегии обязаны давать один и тот же байтовый результат на очереди из
+    # нескольких операций с разными формами attempts -- skipped, несколько
+    # попыток каскада, fallback.
+    it 'совпадает побайтово с JSON.pretty_generate(build(pairs)) на очереди ' \
+       'из нескольких операций с разными формами attempts' do
+      spacepayments = build_provider('spacepayments', avg_latency_sec: 5)
+      other_operation = Domain::Operation.new(operation_id: 'op_200', created_at: nil,
+                                              amount: 90_000, bank: 'tinkoff', card_brand: nil,
+                                              payout_requisite: nil)
+      other_attempts = [
+        build_attempt('provider' => 'vipay', 'decision' => 'skipped',
+                      'reason' => 'amount_exceeds_limit',
+                      'details' => '90000 > limit_amount_max 50000'),
+        build_attempt('provider' => 'payflow', 'decision' => 'selected',
+                      'reason' => 'best_target_adherence', 'details' => 'кандидат единственный',
+                      'strategy' => 'count_share', 'attempt_no' => 1, 'result' => 'rejected'),
+        build_attempt('provider' => 'spacepayments', 'decision' => 'selected',
+                      'reason' => 'fallback_no_eligible_provider',
+                      'details' => 'допустимых внешних провайдеров 0 из 2',
+                      'strategy' => 'fallback', 'attempt_no' => 2, 'result' => 'approved')
+      ]
+      other_outcome = Execution::Outcome.new(selected: spacepayments, attempts: other_attempts,
+                                             result: :approved)
+      pairs = [[operation, outcome], [other_operation, other_outcome]]
+      expected = "#{JSON.pretty_generate(described_class.build(pairs))}\n"
+
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, 'routing_decisions_test.json')
+
+        described_class.write(path, pairs)
+
+        expect(File.read(path)).to eq(expected)
+      end
+    end
   end
 end
 # rubocop:enable RSpec/MultipleExpectations, RSpec/ExampleLength

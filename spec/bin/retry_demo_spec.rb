@@ -7,16 +7,19 @@ require 'tmpdir'
 # На боевом seed 42 публичная очередь не содержит ни одного `rejected` --
 # жюри не увидит ни повторной попытки, ни `next_in_cascade`. README несёт
 # команду демо ретрая с этим же SEED, подобранным перебором `1..99` по
-# возрастанию (первое значение, где `next_in_cascade` появляется). Если
-# кто-то поменяет число в README, не поменяв здесь, — спек и README
-# разойдутся, и это будет замечено, а не тихо забыто.
+# возрастанию (первое значение, где кандидат из реального каскада восстановлен
+# именно `next_in_cascade`, а не остановлен таймаутом -- см. cascade.on_timeout:
+# stop, дефолт: на op_102/op_110 при некоторых seed первый кандидат отвечает
+# expired и каскад дальше не идёт, это не retry-демо). Если кто-то поменяет
+# число в README, не поменяв здесь, — спек и README разойдутся, и это будет
+# замечено, а не тихо забыто.
 #
 # rubocop:disable RSpec/DescribeClass -- сценарий CLI, а не класс
 # rubocop:disable RSpec/MultipleExpectations, RSpec/ExampleLength -- одна операция
 # проверяется набором связанных утверждений о её же attempts, дробить — терять
 # контекст сценария.
 RSpec.describe 'демо ретрая (README §6)' do
-  let(:seed) { 1 }
+  let(:seed) { 3 }
   let(:bin_route) { File.expand_path('../../bin/route', __dir__) }
   let(:queue_path) { reference_path('operations_queue_10.json') }
 

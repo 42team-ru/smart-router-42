@@ -13,7 +13,7 @@ module Config
     KNOWN_TOP_LEVEL_KEYS = %w[
       strategy layers goals strategy_selection outcomes
       amount_ranges obligations rate_limits fallback_provider cascade comparison
-      history_path
+      history_path offline_analytics pending_resolution
     ].freeze
 
     def self.validate!(raw)
@@ -65,6 +65,8 @@ module Config
       validate_hash!(raw['strategy_selection'], 'strategy_selection')
       validate_hash!(raw['outcomes'], 'outcomes')
       SchemaRules.validate_outcomes!(raw['outcomes'])
+      SchemaRules.validate_offline_analytics!(raw['offline_analytics'])
+      SchemaRules.validate_pending_resolution!(raw['pending_resolution'])
     end
 
     def self.validate_hash!(value, key)

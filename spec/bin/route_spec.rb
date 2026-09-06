@@ -121,7 +121,7 @@ RSpec.describe 'bin/route' do
     end
   end
 
-  it 'выбирает эталонных провайдеров без fallback и пишет причины пропусков op_103' do
+  it 'выбирает эталонных провайдеров, включая op_103/op_104 (reference_decisions.json)' do
     Dir.mktmpdir do |tmp|
       run_route(queue_path, '--out-dir', tmp)
       decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
@@ -130,13 +130,23 @@ RSpec.describe 'bin/route' do
       end
       reference_decision = decisions.find { |decision| decision['operation_id'] == 'op_103' }
 
+      # op_103/op_104: единственный допустимый кандидат -- quickpay (эталон
+      # организаторов, reference/data/reference_decisions.json →
+      # deterministic_cases, required_provider: quickpay). На seed 42 он
+      # отвечает таймаутом/отказом -- дефолты cascade.on_timeout: stop и
+      # cascade.exhausted: last_candidate останавливают/завершают каскад на
+      # нём же, а не подключают spacepayments поверх. Это то, что проверяет
+      # `make validate`.
       expect(selected).to include('op_103' => 'quickpay', 'op_104' => 'quickpay',
                                   'op_107' => 'payflow', 'op_108' => 'quickpay')
-      expect(selected.values).not_to include('spacepayments')
       expect(reference_decision['attempts']).to include(
         include('provider' => 'vipay', 'decision' => 'skipped'),
-        include('provider' => 'payflow', 'decision' => 'skipped')
+        include('provider' => 'payflow', 'decision' => 'skipped'),
+        include('provider' => 'quickpay', 'decision' => 'selected', 'result' => 'expired')
       )
+      expect(reference_decision['attempts'].map do |a|
+        a['provider']
+      end).not_to include('spacepayments')
     end
   end
 
@@ -205,7 +215,11 @@ RSpec.describe 'bin/route' do
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
 
         expect(status.exitstatus).to eq(0), stderr
-        expect(distribution(tmp)).to eq('quickpay' => 9, 'payflow' => 1)
+        # cascade.exhausted: last_candidate + on_timeout: stop (дефолты,
+        # проверенные reference_decisions.json/`make validate`) держат
+        # op_103/op_104 на quickpay -- ни один не доезжает до spacepayments;
+        # перемерено под текущие дефолты каскада, не подогнано.
+        expect(distribution(tmp)).to eq('quickpay' => 7, 'vipay' => 1, 'payflow' => 2)
       end
     end
 
@@ -270,8 +284,15 @@ RSpec.describe 'bin/route' do
         overridden = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
 
         expect(status.exitstatus).to eq(0), stderr
-        results = overridden.map { |decision| decision['simulated_result'] }
-        expect(results).to include('rejected').or include('expired')
+        # simulated_result (итог) не годится для always_ok-прогона выше -- он
+        # approved на любой попытке по конструкции. Здесь проверяем, что
+        # deterministic на том же конфиге всё равно даёт не только approved
+        # хотя бы на уровне отдельных попыток (rejected/expired у op_103,
+        # op_104 и других) -- always_ok такого дать не может.
+        attempt_results = overridden.flat_map do |decision|
+          decision['attempts'].map { |attempt| attempt['result'] }
+        end
+        expect(attempt_results).to include('rejected').or include('expired')
       end
     end
 
@@ -342,6 +363,13 @@ RSpec.describe 'bin/route' do
       # встречаются в config/routing.yml дважды (комментарий-документация и
       # само значение), точечная замена одной строки цепляет комментарий
       # первым (String#sub берёт первое вхождение), а не реальный YAML-ключ.
+      #
+      # Дефолты kwargs здесь -- как в самом config/routing.yml
+      # (last_candidate/stop, эталон reference_decisions.json/`make validate`):
+      # вызов cascade_config(tmp) без аргументов обязан находить и
+      # (тождественно) переписывать актуальный дефолтный блок файла -- иначе
+      # он не найдёт строку и упадёт с понятной ошибкой
+      # (config_with_replacements), а не молча свалится в другой сценарий.
       def cascade_block(exhausted: 'last_candidate', on_timeout: 'stop')
         "cascade:\n  exhausted: #{exhausted}\n  on_timeout: #{on_timeout}\n"
       end
@@ -388,7 +416,7 @@ RSpec.describe 'bin/route' do
         end
       end
 
-      it 'exhausted: fallback_provider — исчерпанный каскад добавляет попытку на spacepayments' do
+      it 'exhausted: fallback_provider — исчерпанный каскад добавляет попытку fallback' do
         Dir.mktmpdir do |tmp|
           queue = write_queue(tmp, [exhausted_operation])
           config = cascade_config(tmp, exhausted: 'fallback_provider')
@@ -422,7 +450,7 @@ RSpec.describe 'bin/route' do
         end
       end
 
-      it 'on_timeout: continue — expired не тормозит каскад, approved у следующего побеждает' do
+      it 'on_timeout: continue — expired не тормозит каскад, побеждает approved' do
         Dir.mktmpdir do |tmp|
           queue = write_queue(tmp, [timeout_operation])
           config = cascade_config(tmp, on_timeout: 'continue')
@@ -510,14 +538,126 @@ RSpec.describe 'bin/route' do
       end
     end
 
+    # Второй проход (Execution::PendingResolutionPass) поверх ВСЕЙ очереди --
+    # op_103 таймаутит на quickpay на публичной очереди (см. тест выше про
+    # op_103/op_104), поэтому она же служит живым доказательством секции.
+    describe 'pending_resolution' do
+      def pending_resolution_block(enabled: 'true')
+        "pending_resolution:\n  enabled: #{enabled}\n"
+      end
+
+      def pending_resolution_config(dir, enabled)
+        config_with_replacements(dir, { pending_resolution_block =>
+                                          pending_resolution_block(enabled: enabled) })
+      end
+
+      it 'включён по умолчанию и несёт осмысленную секцию в отчёте (не заглушку)' do
+        Dir.mktmpdir do |tmp|
+          _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
+          report = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
+          pending = report['pending_resolution']
+
+          expect(status.exitstatus).to eq(0), stderr
+          # op_103 -- единственный expired на публичной очереди (см. тест про
+          # op_103/op_104/reference_decisions.json выше), seed 42 на поздней
+          # проверке (attempt_no -1) даёт approved -- перемерено на фактическом
+          # прогоне, не подогнано.
+          expect(pending).to include('checked' => 1, 'resolved' => 1, 'approved' => 1,
+                                     'rejected' => 0, 'still_pending' => 0,
+                                     'freed_in_progress_count' => 1,
+                                     'freed_in_progress_amount' => 150_000)
+          expect(pending['utilization']['quickpay']['used_after'])
+            .to be > pending['utilization']['quickpay']['used_before']
+        end
+      end
+
+      it 'не меняет routing_decisions_test.json -- op_103 остаётся expired' do
+        Dir.mktmpdir do |tmp|
+          run_route(queue_path, '--out-dir', tmp)
+          decisions = JSON.parse(File.read(File.join(tmp, 'routing_decisions_test.json')))
+          decision = decisions.find { |d| d['operation_id'] == 'op_103' }
+
+          expect(decision['simulated_result']).to eq('expired')
+          expect(decision['selected_provider']).to eq('quickpay')
+        end
+      end
+
+      it 'enabled: false -- в отчёте нет ключа pending_resolution' do
+        Dir.mktmpdir do |tmp|
+          config = pending_resolution_config(tmp, false)
+          _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+          report = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
+
+          expect(status.exitstatus).to eq(0), stderr
+          expect(report).not_to have_key('pending_resolution')
+        end
+      end
+
+      # Критерий приёмки: выключенный второй проход не меняет НИЧЕГО, кроме
+      # появления своей секции в отчёте.
+      #
+      # Сравнение идёт между двумя прогонами, а НЕ с корневым
+      # routing_report_test.json. Тот файл -- сдаваемый артефакт: он
+      # перегенерируется из боевой очереди в час стопкода и вдобавок сам
+      # генерируется с pending_resolution: true, поэтому анкер на него
+      # ломается от любой из этих двух причин (см. docs/RUNBOOK.md, мина №1 --
+      # ровно та же ловушка уже была в regression-спеке ниже).
+      it 'enabled: false меняет только наличие секции, решения не трогает' do
+        Dir.mktmpdir do |tmp|
+          on = pending_resolution_config(tmp, true)
+          _out1, err1, status1 = run_route(queue_path, '--out-dir', tmp, '--config', on)
+          decisions_on = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+          report_on = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
+
+          off = pending_resolution_config(tmp, false)
+          _out2, err2, status2 = run_route(queue_path, '--out-dir', tmp, '--config', off)
+          decisions_off = File.binread(File.join(tmp, 'routing_decisions_test.json'))
+          report_off = JSON.parse(File.read(File.join(tmp, 'routing_report_test.json')))
+
+          expect(status1.exitstatus).to eq(0), err1
+          expect(status2.exitstatus).to eq(0), err2
+          expect(decisions_off).to eq(decisions_on)
+          expect(report_off).to eq(report_on.except('pending_resolution'))
+        end
+      end
+
+      it 'на опечатку в pending_resolution.enabled падает кодом 1 без трейса' do
+        Dir.mktmpdir do |tmp|
+          config = config_with_replacements(
+            tmp, { pending_resolution_block => pending_resolution_block(enabled: 'maybe') }
+          )
+
+          _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp, '--config', config)
+
+          expect(status.exitstatus).to eq(1)
+          expect(stderr).to include('pending_resolution.enabled')
+          expect(stderr).not_to include('backtrace')
+        end
+      end
+    end
+
+    # Эталон лежит в spec/fixtures/regression/, а НЕ в корневом
+    # routing_decisions_test.json. Разница принципиальная: корневой файл --
+    # сдаваемый артефакт, и в час стопкода он будет перегенерирован из боевой
+    # operations_queue_test.json (см. docs/RUNBOOK.md, мина №1). Если сравнивать
+    # с ним, спек в этот момент начнёт сравнивать прогон по публичной очереди с
+    # решениями по боевой и упадёт -- под дедлайном это провоцирует "починить"
+    # его подгонкой сдаваемого файла. Отдельная фикстура развязывает регрессию
+    # кода и содержимое поставки.
+    #
+    # Обновлять фикстуру намеренно, когда поведение изменилось осознанно:
+    #   bundle exec bin/route reference/data/operations_queue_10.json --out-dir /tmp/reg
+    #   cp /tmp/reg/routing_decisions_test.json spec/fixtures/regression/public_queue_decisions.json
     it 'дефолтный прогон побайтово не меняется (regression)' do
       Dir.mktmpdir do |tmp|
         _stdout, stderr, status = run_route(queue_path, '--out-dir', tmp)
         produced = File.binread(File.join(tmp, 'routing_decisions_test.json'))
-        committed = File.binread(File.expand_path('../../routing_decisions_test.json', __dir__))
+        expected = File.binread(
+          File.expand_path('../fixtures/regression/public_queue_decisions.json', __dir__)
+        )
 
         expect(status.exitstatus).to eq(0), stderr
-        expect(produced).to eq(committed)
+        expect(produced).to eq(expected)
       end
     end
   end

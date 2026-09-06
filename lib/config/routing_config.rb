@@ -4,7 +4,8 @@ module Config
   # Типизированный результат Config::Loader.load. Только данные, уже
   # прошедшие валидацию схемы — никакой логики. Подключение в пайплайн и
   # семантика полей (какая стратегия/слои реально существуют) — не здесь.
-  # cascade по умолчанию {} и comparison по умолчанию [] -- оба поля добавлены
+  # cascade по умолчанию {}, comparison по умолчанию [], offline_analytics и
+  # pending_resolution по умолчанию {} -- все четыре поля добавлены
   # поверх уже существующих построителей RoutingConfig в спеках
   # (assembly/selector/strategies), которые их не знают; дефолт здесь, а не
   # обязательный keyword, сохраняет их рабочими без правки.
@@ -15,9 +16,10 @@ module Config
   RoutingConfig = Data.define(
     :strategy, :layers, :goals, :strategy_selection, :outcomes,
     :amount_ranges, :obligations, :rate_limits, :fallback_provider, :cascade, :comparison,
-    :history_path
+    :history_path, :offline_analytics, :pending_resolution
   ) do
-    def initialize(cascade: {}, comparison: [], history_path: DEFAULT_HISTORY_PATH, **rest)
+    def initialize(cascade: {}, comparison: [], history_path: DEFAULT_HISTORY_PATH,
+                   offline_analytics: {}, pending_resolution: {}, **rest)
       super
     end
   end

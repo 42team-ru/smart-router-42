@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require 'json'
+require_relative '../io/history_stats'
 require_relative '../routing/reasons'
 require_relative '../routing/achievable'
 require_relative '../routing/constraints'
@@ -18,11 +19,13 @@ module Reporting
   # DecisionsWriter, плюс снимок провайдеров (цели, лимиты, паспортные
   # конверсии) и калибровка Io::HistoryLoader (наблюдаемые конверсии).
   #
-  # achievable_pct считается по-настоящему: Routing::Achievable.for_queue на
-  # множестве допустимых по ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт
-  # только в отчёт и никогда в принятие решений. Тот же achievable/eligibility
-  # переиспользуют DeviationCauses и Retarget -- считается один раз в #sections,
-  # а не заново в каждой секции.
+  # achievable_pct считается по-настоящему: Routing::Achievable.for_queue (по
+  # количеству) и .for_volume (по объёму) на множестве допустимых по
+  # ИСХОДНОМУ снапшоту. Это офлайн-расчёт, он идёт только в отчёт и никогда в
+  # принятие решений. Тот же achievable/achievable_volume/eligibility
+  # переиспользуют DeviationCauses и Retarget (Retarget -- только по
+  # количеству, у него нет объёмного аналога) -- считается один раз в
+  # #sections, а не заново в каждой секции.
   #
   # benchmark остаётся заглушкой только как дефолт на случай отсутствия
   # kwarg-а (см. #benchmark ниже) -- в реальном прогоне bin/route всегда
@@ -31,25 +34,37 @@ module Reporting
   module ReportBuilder
     FALLBACK_PROVIDER = 'spacepayments'
 
-    # comparison: секция приходит готовым хешем из Offline::Comparison.build,
-    # как benchmark -- внутри build ничего
-    # не гоняет. nil (дефолт) -- ключа `comparison` в отчёте нет вовсе, не
-    # null-заглушка: старые вызовы без этого kwarg-а получают отчёт прежней формы.
+    # Дефолт на отсутствующий history: -- те же "нет данных вовсе", что и
+    # пустой operations_history.csv (Io::HistoryLoader на total_n == 0):
+    # Recommendations.conversion честно молчит про каждого провайдера
+    # (known? всегда false), а не падает NoMethodError на Hash без нужных
+    # методов.
+    EMPTY_HISTORY = Io::HistoryStats.new(entries: {}, k: 0, smoothed: false)
+
+    # comparison и pending_resolution: секции приходят готовыми хешами --
+    # comparison из Offline::Comparison.build, pending_resolution из
+    # Reporting::PendingResolutionSummary.build (bin/route), как benchmark --
+    # внутри build ничего не гоняет. nil (дефолт для обеих) -- соответствующего
+    # ключа в отчёте нет вовсе, не null-заглушка: старые вызовы без этих
+    # kwargs получают отчёт прежней формы.
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
-    def self.build(pairs, providers:, history: {}, strategy: nil, benchmark: nil, comparison: nil)
+    def self.build(pairs, providers:, history: EMPTY_HISTORY, strategy: nil, benchmark: nil,
+                   comparison: nil, pending_resolution: nil)
       operations = pairs.map(&:first)
       outcomes = pairs.map(&:last)
 
       report = header(operations, strategy)
                .merge(sections(pairs, outcomes, providers, history, benchmark))
-      comparison.nil? ? report : report.merge('comparison' => comparison)
+      report = report.merge('comparison' => comparison) unless comparison.nil?
+      pending_resolution.nil? ? report : report.merge('pending_resolution' => pending_resolution)
     end
 
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают секции неизменяемого отчёта.
-    def self.write(path, pairs, providers:, history: {}, strategy: nil, benchmark: nil,
-                   comparison: nil)
+    def self.write(path, pairs, providers:, history: EMPTY_HISTORY, strategy: nil, benchmark: nil,
+                   comparison: nil, pending_resolution: nil)
       report = build(pairs, providers: providers, history: history, strategy: strategy,
-                            benchmark: benchmark, comparison: comparison)
+                            benchmark: benchmark, comparison: comparison,
+                            pending_resolution: pending_resolution)
       File.write(path, "#{JSON.pretty_generate(report)}\n")
     end
 
@@ -65,20 +80,34 @@ module Reporting
     def self.sections(pairs, outcomes, providers, history, benchmark)
       operations = pairs.map(&:first)
       eligibility = eligibility_for(operations, providers)
-      achievable = Routing::Achievable.for_queue(operations: operations, providers: providers,
-                                                 eligibility: eligibility)
+      achievable, achievable_volume = achievable_for(operations, providers, eligibility)
       metrics = Offline::Objective.from_pairs(pairs, providers: providers)
 
-      distributions(pairs, outcomes, providers, achievable)
-        .merge(analytics(pairs, outcomes, providers, history, benchmark, achievable, eligibility,
-                         metrics))
+      distributions(pairs, outcomes, providers, achievable, achievable_volume)
+        .merge(analytics(pairs, outcomes, providers, history, benchmark, achievable,
+                         achievable_volume, eligibility, metrics))
     end
     private_class_method :sections
 
-    def self.distributions(pairs, outcomes, providers, achievable)
+    # Пара (по количеству, по объёму) -- Routing::Achievable.for_queue и
+    # .for_volume на одном и том же снапшоте допуска, посчитанные один раз
+    # для всех секций отчёта (distribution/volume_distribution/
+    # deviation_causes).
+    def self.achievable_for(operations, providers, eligibility)
+      achievable = Routing::Achievable.for_queue(operations: operations, providers: providers,
+                                                 eligibility: eligibility)
+      achievable_volume = Routing::Achievable.for_volume(operations: operations,
+                                                         providers: providers,
+                                                         eligibility: eligibility)
+      [achievable, achievable_volume]
+    end
+    private_class_method :achievable_for
+
+    def self.distributions(pairs, outcomes, providers, achievable, achievable_volume)
       {
         'distribution' => Distributions.by_final(pairs, providers, :count, achievable),
-        'volume_distribution' => Distributions.by_final(pairs, providers, :amount, achievable),
+        'volume_distribution' => Distributions.by_final(pairs, providers, :amount,
+                                                        achievable_volume),
         'attempt_distribution' => Distributions.by_attempt(outcomes, providers)
       }
     end
@@ -99,14 +128,15 @@ module Reporting
     private_class_method :eligibility_for
 
     # rubocop:disable-next Metrics/ParameterLists -- параметры отражают уже посчитанные секции отчёта.
-    def self.analytics(pairs, outcomes, providers, history, benchmark, achievable, eligibility,
-                       metrics)
+    def self.analytics(pairs, outcomes, providers, history, benchmark, achievable,
+                       achievable_volume, eligibility, metrics)
       {
         'skip_reasons' => Distributions.skip_reasons(outcomes),
         'projected_daily_utilization' => Utilization.projected_daily(pairs, providers),
         'fallback' => fallback(outcomes),
         'benchmark' => benchmark || self.benchmark,
-        'deviation_causes' => DeviationCauses.build(pairs, providers, achievable, eligibility),
+        'deviation_causes' => DeviationCauses.build(pairs, providers, achievable, eligibility,
+                                                    achievable_volume: achievable_volume),
         'recommendations' => build_recommendations(pairs, providers, history, achievable, metrics)
       }
     end

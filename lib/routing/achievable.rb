@@ -49,6 +49,64 @@ module Routing
       end
     end
 
+    # Достижимая доля по ОБЪЁМУ (рубли), а не по количеству мест — родная
+    # сестра for_queue. Механика та же (apportion по largest remainders +
+    # clamp! до [lower; upper] + перенормировка в базисные пункты), только
+    # единица распределения — сумма операции, а не штука.
+    #
+    # Приближение, а не точный расчёт: achievability по объёму в общем случае
+    # — задача о рюкзаке (какое подмножество операций даст провайдеру ровно
+    # столько денег, сколько нужно), и точного решения в один проход у неё
+    # нет. Нижняя граница точна (сумма singleton-операций считается без
+    # допущений), а верхняя — оценка сверху: min(сумма всех допустимых
+    # операций, свободный дневной лимит). В отличие от for_queue, где
+    # headroom подбирает поднабор операций жадно по возрастанию суммы (это
+    # штуки, их нельзя дробить), деньги внутри лимита не обязаны совпадать с
+    # суммой каких-то конкретных заявок — поэтому кэп по деньгам это прямой
+    # минимум, а не пересчёт по операциям. Как и офлайн-эталон называет своё
+    # число offline_bound, а не offline_optimum, здесь оценка сверху, а не
+    # доказанный максимум.
+    def for_volume(operations:, providers:, eligibility:)
+      external = providers.reject { |provider| provider.name == 'spacepayments' }
+      return {} if operations.empty?
+
+      total = operations.sum(&:amount)
+      weights = external.to_h { |provider| [provider.name, volume_weight_bp(provider)] }
+      return zero_volume_result(external, weights) if total.zero?
+
+      lower = lower_volume_bounds(operations, weights.keys, eligibility)
+      upper = upper_volume_bounds(operations, external, eligibility)
+      seats = apportion(weights, total)
+      clamp!(seats, lower, upper, weights, total)
+      bp = normalize_integer_seats(seats, total)
+
+      external.to_h do |provider|
+        name = provider.name
+        eligible_amount = eligible_volume(name, eligibility, operations)
+        bound = if seats[name] == lower[name] && lower[name].positive?
+                  :only_option
+                elsif seats[name] == upper[name] && upper[name] < eligible_amount
+                  :money
+                else
+                  :none
+                end
+        [name,
+         { target_bp: weights[name], achievable_amount: seats[name], achievable_bp: bp[name],
+           bound: bound }]
+      end
+    end
+
+    # Сумма операций в очереди равна нулю (все нулевые чеки) — распределять
+    # физически нечего, но это не пустая очередь, поэтому for_queue-подобный
+    # ранний return {} тут не подходит: внешние провайдеры обязаны остаться в
+    # результате с нулевой достижимой долей, а не пропасть из отчёта.
+    def zero_volume_result(external, weights)
+      external.to_h do |provider|
+        name = provider.name
+        [name, { target_bp: weights[name], achievable_amount: 0, achievable_bp: 0, bound: :none }]
+      end
+    end
+
     def normalize_weights(weights)
       return {} if weights.empty?
 
@@ -107,6 +165,42 @@ module Routing
                 end
         [provider.name, count]
       end
+    end
+
+    def lower_volume_bounds(operations, names, eligibility)
+      names.to_h do |name|
+        [name, operations.sum do |operation|
+          Array(eligibility[operation.operation_id]).sort == [name] ? operation.amount : 0
+        end]
+      end
+    end
+
+    # Кэп по деньгам — минимум суммы допустимых операций и свободного
+    # headroom, но не меньше нуля: провайдер, уже выбравший весь лимит (или
+    # ушедший в минус по снапшоту), не может получить отрицательную
+    # достижимую долю. nil в daily_amount_limit — «ограничения нет», а не
+    # ноль, поэтому в этом случае кэпа по деньгам вообще нет.
+    def upper_volume_bounds(operations, providers, eligibility)
+      providers.to_h do |provider|
+        eligible_amount = eligible_volume(provider.name, eligibility, operations)
+        limit = provider.daily_amount_limit
+        headroom = limit.nil? ? nil : limit - provider.daily_approved_amount.to_i
+        amount = headroom.nil? ? eligible_amount : [eligible_amount, [headroom, 0].max].min
+        [provider.name, amount]
+      end
+    end
+
+    def eligible_volume(name, eligibility, operations)
+      operations.sum do |operation|
+        Array(eligibility[operation.operation_id]).include?(name) ? operation.amount : 0
+      end
+    end
+
+    # volume_share_pct отсутствует в снапшоте организаторов -- тот же
+    # фоллбэк на traffic_percentage, что и Routing::Strategies::VolumeShare
+    # и Reporting::Distributions.target_of.
+    def volume_weight_bp(provider)
+      (provider.volume_share_pct || provider.traffic_percentage).to_i * 100
     end
 
     def clamp!(seats, lower, upper, weights, total)

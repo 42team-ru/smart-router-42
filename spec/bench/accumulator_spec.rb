@@ -46,8 +46,9 @@ RSpec.describe Bench::Accumulator do
       providers = Io::ProvidersLoader.load(providers_path)
       operations = Io::QueueLoader.load(queue_path).operations
 
-      conversions = providers.to_h { |p| [p.name, p.conversion_24h.to_f] }
-      outcomes = Execution::OutcomeSource::Deterministic.new(seed: '42', conversions: conversions)
+      outcome_table = Execution::OutcomeSource::Deterministic.passport_outcome_table(providers)
+      outcomes = Execution::OutcomeSource::Deterministic.new(seed: '42',
+                                                             outcome_table: outcome_table)
       state = State::Providers.new(providers)
       planner = Routing::Planner.new(providers: providers, strategy: Routing::Strategies.build('count_share'),
                                      fallback_provider: 'spacepayments')

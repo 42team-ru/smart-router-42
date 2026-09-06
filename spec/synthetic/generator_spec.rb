@@ -32,8 +32,8 @@ RSpec.describe 'Synthetic generator (smoke)' do
   end
 
   def build_pipeline(providers, seed: '42')
-    conversions = providers.to_h { |p| [p.name, p.conversion_24h.to_f] }
-    outcomes = Execution::OutcomeSource::Deterministic.new(seed: seed, conversions: conversions)
+    outcome_table = Execution::OutcomeSource::Deterministic.passport_outcome_table(providers)
+    outcomes = Execution::OutcomeSource::Deterministic.new(seed: seed, outcome_table: outcome_table)
     strategy = Routing::Strategies.build('count_share')
     {
       state: State::Providers.new(providers),

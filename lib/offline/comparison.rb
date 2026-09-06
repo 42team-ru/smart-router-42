@@ -103,6 +103,11 @@ module Offline
     end
     private_class_method :build_planner
 
+    # Дефолты -- last_candidate и stop, как в bin/route
+    # (cascade_exhausted/cascade_on_timeout) и в config/routing.yml. Три копии
+    # одного и того же дефолта на одном и том же config.cascade -- расхождение
+    # хотя бы в одной незаметно рассинхронизирует офлайн-сравнение с боевым
+    # каскадом.
     def self.build_executor(config, providers, history)
       Execution::Executor.new(
         outcomes: build_outcomes(config, providers, history),
@@ -124,17 +129,25 @@ module Offline
     def self.deterministic_outcomes(config, providers, history)
       Execution::OutcomeSource::Deterministic.new(
         seed: config.outcomes.fetch('seed', '42'),
-        conversions: outcome_conversions(config, providers, history)
+        outcome_table: outcome_table(config, providers, history)
       )
     end
     private_class_method :deterministic_outcomes
 
-    def self.outcome_conversions(config, providers, history)
-      return history if config.outcomes.fetch('calibrate_from_history', false)
+    # Тот же выбор таблицы, что и outcome_table в bin/route: паспортная
+    # (Deterministic.passport_outcome_table) строится для ВСЕХ провайдеров
+    # снапшота и остаётся базой; калибровка из истории (если включена)
+    # накладывается поверх только там, где история реально есть.
+    # spacepayments (self-provider фолбэка, в operations_history.csv его нет)
+    # остаётся на паспортном conversion_24h, а не на скалярном дефолте
+    # Execution::OutcomeSource::Deterministic::DEFAULT_OUTCOME.
+    def self.outcome_table(config, providers, history)
+      passport = Execution::OutcomeSource::Deterministic.passport_outcome_table(providers)
+      return passport unless config.outcomes.fetch('calibrate_from_history', false)
 
-      providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
+      passport.merge(history.to_outcome_table)
     end
-    private_class_method :outcome_conversions
+    private_class_method :outcome_table
 
     def self.fallback_used(pairs, fallback_provider)
       pairs.count { |_operation, outcome| outcome.selected.name == fallback_provider }

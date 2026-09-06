@@ -110,9 +110,13 @@ module Bench
         outcomes: outcomes, state: State::Providers.new(providers) }
     end
 
+    # Бенчмарк всегда паспортный (conversion_24h) -- у него нет своего конфига
+    # с outcomes.calibrate_from_history, история сюда не прокидывается.
     def build_outcomes(providers)
-      conversions = providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
-      Execution::OutcomeSource::Deterministic.new(seed: @seed, conversions: conversions)
+      Execution::OutcomeSource::Deterministic.new(
+        seed: @seed,
+        outcome_table: Execution::OutcomeSource::Deterministic.passport_outcome_table(providers)
+      )
     end
 
     def stream_operations(&)

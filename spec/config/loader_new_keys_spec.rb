@@ -125,10 +125,57 @@ RSpec.describe Config::Loader do
       expect(config.cascade).to eq('exhausted' => 'fallback_provider', 'on_timeout' => 'continue')
     end
 
-    it 'дефолтный config/routing.yml несёт явные дефолты cascade' do
+    it 'дефолтный config/routing.yml несёт явные дефолты cascade (эталон организаторов)' do
       config = described_class.load(File.expand_path('../../config/routing.yml', __dir__))
 
       expect(config.cascade).to eq('exhausted' => 'last_candidate', 'on_timeout' => 'stop')
+    end
+  end
+
+  describe 'ключ outcomes.smoothing' do
+    it 'принимает true' do
+      config = load_yaml(<<~YAML)
+        strategy: count_share
+        fallback_provider: spacepayments
+        outcomes:
+          smoothing: true
+      YAML
+
+      expect(config.outcomes).to eq('smoothing' => true)
+    end
+
+    it 'принимает false' do
+      config = load_yaml(<<~YAML)
+        strategy: count_share
+        fallback_provider: spacepayments
+        outcomes:
+          smoothing: false
+      YAML
+
+      expect(config.outcomes).to eq('smoothing' => false)
+    end
+
+    it 'отсутствие ключа — законный вход, дефолт подставляется не здесь' do
+      config = load_yaml("strategy: count_share\nfallback_provider: spacepayments\n")
+
+      expect(config.outcomes).to eq({})
+    end
+
+    it 'значение не true/false → SchemaError' do
+      expect do
+        load_yaml(<<~YAML)
+          strategy: count_share
+          fallback_provider: spacepayments
+          outcomes:
+            smoothing: "false"
+        YAML
+      end.to raise_error(Config::SchemaError, /outcomes\.smoothing должен быть true или false/)
+    end
+
+    it 'дефолтный config/routing.yml несёт явный smoothing: true' do
+      config = described_class.load(File.expand_path('../../config/routing.yml', __dir__))
+
+      expect(config.outcomes['smoothing']).to be(true)
     end
   end
 end

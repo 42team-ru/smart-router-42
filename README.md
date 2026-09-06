@@ -175,17 +175,28 @@ fallback_provider: spacepayments
 ### Одна строка YAML меняет распределение
 
 ```bash
-sed 's/^strategy: count_share$/strategy: load/' config/routing.yml > /tmp/load.yml
-bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/load.yml
+sed 's/^strategy: count_share$/strategy: round_robin/' config/routing.yml > /tmp/rr.yml
+bundle exec bin/route reference/data/operations_queue_10.json --config /tmp/rr.yml
 ```
 
-| Строка в конфиге | payflow | quickpay | vipay |
-|---|:---:|:---:|:---:|
-| `strategy: count_share` | 3 | 3 | 4 |
-| `strategy: load` | 1 | 9 | 0 |
+| Строка в конфиге | payflow | quickpay | vipay | spacepayments |
+|---|:---:|:---:|:---:|:---:|
+| `strategy: count_share` | 3 | 3 | 4 | 0 |
+| `strategy: round_robin` | 4 | 3 | 3 | 0 |
 
 Валидатор на обоих прогонах зелёный. Проверяется автоматически —
 `spec/bin/config_switch_spec.rb`.
+
+Разница выглядит скромно, потому что публичная очередь тесная: половину заявок
+берёт единственный подходящий провайдер, и выбирать там не из чего. Стратегия
+видна не в счёте, а в отклонении от **достижимой** доли по объёму — `count_share`
+попадает в неё точно (0.0 п.п. у всех), `round_robin` промахивается на 3.9 п.п.
+(см. `docs/ARCHITECTURE.md` §8).
+
+Подменять так можно не любую стратегию: блок `comparison` в боевом конфиге
+требует, чтобы среди его вариантов был ровно текущий `strategy` + `layers`,
+иначе запуск честно падает на валидации схемы. Стратегии вне этого списка
+пробуйте флагом `--strategy` либо добавляйте вариант в `comparison`.
 
 ### Каскад с отказом
 

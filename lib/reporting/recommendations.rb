@@ -5,6 +5,16 @@ module Reporting
   # conversion_24h с историей и приближение к дневному лимиту.
   module Recommendations
     CONVERSION_GAP_THRESHOLD = 0.05
+
+    # "Пересчитать по факту" звучит как установленный факт, а не догадка --
+    # выдавать эту формулировку на маленькой выборке (payflow — 19 наблюдений
+    # на reference/data/operations_history.csv) нечестно: 95%-й интервал
+    # Уилсона для p≈0.5 на n=19 — это ±0.22, шире самого
+    # CONVERSION_GAP_THRESHOLD. LARGE_SAMPLE_N — размер, на котором такой
+    # интервал сжимается примерно до ширины самого порога (±0.05..0.06 при
+    # p≈0.7-0.9) и дальнейшему сравнению с паспортом можно доверять; меньше --
+    # верно только направление расхождения, не его величина.
+    LARGE_SAMPLE_N = 200
     MAX_SLOTS_LEFT = 3
     TRAFFIC_STEP_DOWN = 15
 
@@ -23,15 +33,49 @@ module Reporting
     end
     private_class_method :average_amount
 
+    # history -- Io::HistoryStats (см. lib/io/history_stats.rb): не просто
+    # доля, а ещё и n (сколько операций видели), approved_count и k -- без
+    # них рекомендация превращалась бы в "паспорт разошёлся с фактом" без
+    # ответа на "а факту вообще можно верить на такой выборке".
     def self.conversion(provider, history)
-      observed = history[provider.name]
-      return nil if observed.nil? || provider.conversion_24h.nil?
+      return nil unless history.known?(provider.name) && !provider.conversion_24h.nil?
+
+      observed = history.approved_ratio(provider.name)
       return nil if (provider.conversion_24h - observed).abs < CONVERSION_GAP_THRESHOLD
 
-      "#{provider.name}: conversion_24h заявлена #{provider.conversion_24h}, " \
-        "наблюдаемая #{observed} по истории — пересчитать по факту"
+      conversion_message(provider, history, observed)
     end
     private_class_method :conversion
+
+    def self.conversion_message(provider, history, observed)
+      obs = history.observations(provider.name)
+      estimate = estimate_text(history, observed)
+      basis = "по истории #{history.approved_count(provider.name)}/#{obs} (#{estimate})"
+
+      "#{provider.name}: conversion_24h заявлена #{provider.conversion_24h}, #{basis} — " \
+        "#{verdict(obs)}"
+    end
+    private_class_method :conversion_message
+
+    # Сглажена оценка или сырая -- видно явно, а не скрыто за одним числом:
+    # сглаженная 0.551 при сырых 9/19 расходится с наивным approved/всего
+    # (0.474) заметно, и это расхождение само по себе часть объяснения.
+    def self.estimate_text(history, observed)
+      return "наблюдаемая #{observed}" unless history.smoothed?
+
+      "сглаженная оценка #{observed}, k=#{format('%.1f', history.k.to_f)}"
+    end
+    private_class_method :estimate_text
+
+    # Вывод не сильнее, чем позволяют данные (см. LARGE_SAMPLE_N): на малой
+    # выборке расхождение может быть шумом, а не фактом, и "пересчитать" было
+    # бы преувеличением.
+    def self.verdict(obs)
+      return 'пересчитать по факту' if obs >= LARGE_SAMPLE_N
+
+      'расхождение существенное, но выборка мала: проверить на большем периоде'
+    end
+    private_class_method :verdict
 
     def self.headroom(provider, avg_amount)
       return nil if provider.daily_amount_limit.nil? || provider.traffic_percentage.nil?

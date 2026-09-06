@@ -27,6 +27,10 @@ RSpec.describe Reporting::DeviationCauses do
       Routing::Achievable.for_queue(operations: operations, providers: providers,
                                     eligibility: eligibility)
     end
+    let(:achievable_volume) do
+      Routing::Achievable.for_volume(operations: operations, providers: providers,
+                                     eligibility: eligibility)
+    end
     let(:by_name) { providers.to_h { |provider| [provider.name, provider] } }
 
     # Итоговые провайдеры взяты из уже прогнанного и проверенного
@@ -48,6 +52,10 @@ RSpec.describe Reporting::DeviationCauses do
       end
     end
     let(:causes) { described_class.build(pairs, providers, achievable, eligibility) }
+    let(:causes_with_volume) do
+      described_class.build(pairs, providers, achievable, eligibility,
+                            achievable_volume: achievable_volume)
+    end
 
     it 'quickpay: перегружен вынужденными операциями -- перечисляет их поимённо' do
       expect(causes).to include(
@@ -71,6 +79,26 @@ RSpec.describe Reporting::DeviationCauses do
 
     it 'порог включает отклонение, равное ровно 5.0 п.п. (регрессия на > вместо >=)' do
       expect(causes.size).to eq(2)
+    end
+
+    # achievable_volume по умолчанию пуст -- без него build ведёт себя так же,
+    # как раньше (только причины по количеству).
+    it 'без achievable_volume не добавляет причин по объёму' do
+      expect(causes).to eq(causes_with_volume.reject { |cause| cause.include?('по объёму') })
+    end
+
+    it 'quickpay: форсирован по объёму теми же операциями, с суммой в тексте' do
+      expect(causes_with_volume).to include(
+        'quickpay +25.5 п.п. по объёму: операции op_103, op_104, op_108 на сумму ' \
+        '195 000 ₽ не имели альтернатив по сумме и банку'
+      )
+    end
+
+    it 'payflow и vipay: отклонение по объёму без структурной причины -- вручную' do
+      expect(causes_with_volume).to include(
+        a_string_matching(/\Avipay -13\.6 п\.п\. по объёму: структурная причина не определена/),
+        a_string_matching(/\Apayflow -12 п\.п\. по объёму: структурная причина не определена/)
+      )
     end
   end
 
@@ -107,6 +135,33 @@ RSpec.describe Reporting::DeviationCauses do
 
       expect(vipay_cause).to include('op_b')
       expect(vipay_cause).not_to include('op_a')
+    end
+
+    # rubocop:disable-next RSpec/ExampleLength -- сборка фикстуры без общих let, сценарий локальный.
+    it 'по объёму: дневной лимит -- сумма и остаток в тексте, а не только счёт' do
+      # op_a и op_b по 15 000 -- оба допустимы обоим провайдерам, но по факту
+      # vipay достался только op_a: 15 000 из 30 000 (50%) при цели 10% --
+      # отклонение +40 п.п. achievable_volume собран вручную (bound: :money),
+      # чтобы не тянуть реальный Routing::Achievable ради одного сообщения.
+      eligibility = { 'op_a' => %w[vipay payflow], 'op_b' => %w[vipay payflow] }
+      achievable_volume = {
+        'vipay' => { target_bp: 1000, achievable_amount: 15_000, achievable_bp: 5000,
+                     bound: :money },
+        'payflow' => { target_bp: 9000, achievable_amount: 15_000, achievable_bp: 5000,
+                       bound: :none }
+      }
+      pairs = [
+        [op_a, Execution::Outcome.new(selected: vipay, attempts: [], result: :approved)],
+        [op_b, Execution::Outcome.new(selected: payflow, attempts: [], result: :approved)]
+      ]
+
+      causes = described_class.build(pairs, providers, {}, eligibility,
+                                     achievable_volume: achievable_volume)
+
+      expect(causes).to include(
+        'vipay +40 п.п. по объёму: дневной лимит пропустил 15 000 ₽ из 30 000 ₽ ' \
+        'допустимых (не хватило 15 000 ₽)'
+      )
     end
 
     # rubocop:disable-next RSpec/ExampleLength -- сборка фикстуры без общих let, сценарий локальный.

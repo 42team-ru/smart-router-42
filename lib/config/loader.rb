@@ -16,7 +16,7 @@ module Config
     OPTIONAL_DEFAULTS = {
       layers: [], goals: {}, strategy_selection: {}, outcomes: {},
       amount_ranges: [], obligations: {}, rate_limits: {}, cascade: {}, comparison: [],
-      history_path: DEFAULT_HISTORY_PATH
+      history_path: DEFAULT_HISTORY_PATH, offline_analytics: {}, pending_resolution: {}
     }.freeze
 
     def self.load(path)

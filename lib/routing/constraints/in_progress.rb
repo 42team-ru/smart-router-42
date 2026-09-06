@@ -22,16 +22,21 @@ module Routing
     # Эта ёмкость — то, ради чего резерв ставится до ответа провайдера, а не
     # после: пока заявка в полёте, она занимает слот, и следующая заявка
     # обязана это видеть.
+    #
+    # Как и DailyLimit#approved_amount: если передано состояние прогона,
+    # счётчики берутся из него, а не из снимка провайдера — снимок не знает
+    # про резервы, которые сама очередь уже поставила. Без состояния (офлайн-
+    # расчёт, Routing::Achievable, Reporting) считается по снимку, как раньше.
     class InProgress < Base
       REASON = 'in_progress_limit_exceeded'
 
-      def self.violation(provider, operation, _state)
-        count_violation(provider) || amount_violation(provider, operation)
+      def self.violation(provider, operation, state)
+        count_violation(provider, state) || amount_violation(provider, operation, state)
       end
 
-      def self.count_violation(provider)
+      def self.count_violation(provider, state)
         count_limit = provider.in_progress_count_limit
-        count = provider.in_progress_count || 0
+        count = live_count(provider, state)
         return nil if count_limit.nil? || count + 1 <= count_limit
 
         Violation.new(
@@ -42,9 +47,9 @@ module Routing
         )
       end
 
-      def self.amount_violation(provider, operation)
+      def self.amount_violation(provider, operation, state)
         amount_limit = provider.in_progress_amount_limit
-        amount = provider.in_progress_amount || 0
+        amount = live_amount(provider, state)
         return nil if amount_limit.nil? || amount + operation.amount <= amount_limit
 
         Violation.new(
@@ -56,7 +61,19 @@ module Routing
         )
       end
 
-      private_class_method :count_violation, :amount_violation
+      def self.live_count(provider, state)
+        return state.in_progress_count(provider.name) if state.respond_to?(:in_progress_count)
+
+        provider.in_progress_count || 0
+      end
+
+      def self.live_amount(provider, state)
+        return state.in_progress_amount(provider.name) if state.respond_to?(:in_progress_amount)
+
+        provider.in_progress_amount || 0
+      end
+
+      private_class_method :count_violation, :amount_violation, :live_count, :live_amount
     end
   end
 end

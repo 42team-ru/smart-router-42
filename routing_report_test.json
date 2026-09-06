@@ -37,22 +37,22 @@
       "amount": 102000,
       "share_pct": 26.4,
       "target_pct": 50,
-      "achievable_pct": null,
-      "deviation_pp": -23.6
+      "achievable_pct": 26.4,
+      "deviation_pp": 0.0
     },
     "payflow": {
       "amount": 88800,
       "share_pct": 23.0,
       "target_pct": 30,
-      "achievable_pct": null,
-      "deviation_pp": -7.0
+      "achievable_pct": 23.0,
+      "deviation_pp": 0.0
     },
     "quickpay": {
       "amount": 195000,
       "share_pct": 50.5,
       "target_pct": 20,
-      "achievable_pct": null,
-      "deviation_pp": 30.5
+      "achievable_pct": 50.5,
+      "deviation_pp": 0.0
     },
     "spacepayments": {
       "amount": 0,
@@ -74,9 +74,9 @@
       "observed_conversion": 1.0
     },
     "quickpay": {
-      "attempts": 3,
+      "attempts": 4,
       "successful": 1,
-      "observed_conversion": 0.333
+      "observed_conversion": 0.25
     },
     "spacepayments": {
       "attempts": 0,
@@ -112,60 +112,98 @@
     }
   },
   "fallback": {
-    "first_attempt_success": 8,
-    "recovered_by_fallback": 0,
-    "fallback_rate_pct": 0.0,
+    "first_attempt_success": 7,
+    "recovered_by_fallback": 1,
+    "fallback_rate_pct": 10.0,
     "spacepayments_used": 0,
     "cascade_exhausted": 2
   },
   "benchmark": {
     "offline_bound": {
       "max_deviation_pp": 5.0,
-      "delivered": 10
+      "delivered": 9
     },
     "our_online_result": {
       "max_deviation_pp": 5.0,
-      "delivered": 10
+      "delivered": 9
     },
     "competitive_ratio": 1.0,
     "note": "эталон эвристический: жадный старт и локальные улучшения с учётом порядка очереди, не доказанный оптимум; отклонение меряется от паспортных целей 40/35/25, а не от достижимых, поэтому не совпадает с distribution.deviation_pp; контрфактуалы посчитаны нашим симулятором (seed 42), а не генератором организаторов"
   },
   "deviation_causes": [
     "payflow -5 п.п. к цели: дневной лимит пропустил 3 из 4 допустимых операций (не хватило места для 1)",
-    "quickpay +5 п.п. к цели: op_103, op_104, op_108 не имели альтернатив по сумме и банку"
+    "quickpay +5 п.п. к цели: op_103, op_104, op_108 не имели альтернатив по сумме и банку",
+    "vipay -23.6 п.п. по объёму: структурная причина не определена (допуск и дневной лимит не ограничивают) — требуется разбор вручную",
+    "payflow -7 п.п. по объёму: структурная причина не определена (допуск и дневной лимит не ограничивают) — требуется разбор вручную",
+    "quickpay +30.5 п.п. по объёму: операции op_103, op_104, op_108 на сумму 195 000 ₽ не имели альтернатив по сумме и банку"
   ],
   "recommendations": [
-    "vipay: conversion_24h заявлена 0.87, наблюдаемая 0.78 по истории — пересчитать по факту",
-    "payflow: conversion_24h заявлена 0.91, наблюдаемая 0.474 по истории — пересчитать по факту",
+    "vipay: conversion_24h заявлена 0.87, по истории 32/41 (сглаженная оценка 0.759, k=11.4) — расхождение существенное, но выборка мала: проверить на большем периоде",
+    "payflow: conversion_24h заявлена 0.91, по истории 9/19 (сглаженная оценка 0.551, k=11.4) — расхождение существенное, но выборка мала: проверить на большем периоде",
     "payflow: свободно 100 000 ₽ при среднем чеке 38 580 ₽ — снизить traffic_percentage 35 → 20 до сброса дневного лимита",
-    "quickpay: conversion_24h заявлена 0.79, наблюдаемая 0.675 по истории — пересчитать по факту",
+    "quickpay: conversion_24h заявлена 0.79, по истории 27/40 (сглаженная оценка 0.676, k=11.4) — расхождение существенное, но выборка мала: проверить на большем периоде",
     "retarget: паспортные цели (vipay 40%, payflow 35% → 30%, quickpay 25% → 30%) недостижимы (payflow ограничен дневным лимитом; quickpay форсирован отсутствием альтернатив у части операций) — максимальное отклонение падает с 5 до 0 п.п."
   ],
   "comparison": {
     "baseline": "count_share",
     "variants": {
       "round_robin": {
-        "delivered": 10,
+        "delivered": 9,
         "fallback_used": 0,
-        "retried": 0,
-        "max_deviation_pp": 40.0,
-        "max_deviation_from_target_pp": 45.0
+        "retried": 2,
+        "max_deviation_pp": 10.0,
+        "max_deviation_from_target_pp": 10.0
       },
       "count_share": {
-        "delivered": 10,
+        "delivered": 9,
         "fallback_used": 0,
-        "retried": 0,
+        "retried": 1,
         "max_deviation_pp": 0.0,
         "max_deviation_from_target_pp": 5.0
       },
       "count_share+layers": {
-        "delivered": 10,
+        "delivered": 9,
         "fallback_used": 0,
-        "retried": 0,
-        "max_deviation_pp": 20.0,
-        "max_deviation_from_target_pp": 25.0
+        "retried": 2,
+        "max_deviation_pp": 10.0,
+        "max_deviation_from_target_pp": 15.0
       }
     },
     "note": "офлайн-сравнение: тот же онлайн-проход по очереди под другой стратегией/слоями, каждый вариант на своём состоянии; результат идёт только в отчёт и в консоль, в принятие решений не входит"
+  },
+  "pending_resolution": {
+    "checked": 1,
+    "resolved": 1,
+    "approved": 1,
+    "rejected": 0,
+    "still_pending": 0,
+    "freed_in_progress_count": 1,
+    "freed_in_progress_amount": 150000,
+    "utilization": {
+      "vipay": {
+        "used_before": 3302000,
+        "used_after": 3302000,
+        "utilization_pct_before": 66.0,
+        "utilization_pct_after": 66.0
+      },
+      "payflow": {
+        "used_before": 2988800,
+        "used_after": 2988800,
+        "utilization_pct_before": 99.6,
+        "utilization_pct_after": 99.6
+      },
+      "quickpay": {
+        "used_before": 1142000,
+        "used_after": 1292000,
+        "utilization_pct_before": 14.3,
+        "utilization_pct_after": 16.2
+      },
+      "spacepayments": {
+        "used_before": 0,
+        "used_after": 0,
+        "utilization_pct_before": null,
+        "utilization_pct_after": null
+      }
+    }
   }
 }

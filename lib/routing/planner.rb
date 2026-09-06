@@ -33,6 +33,8 @@ module Routing
       skipped = skipped.map do |provider|
         [provider, Constraints.check(provider, operation, state)]
       end
+      candidates, skipped, capacity_note = rescue_live_capacity(candidates, skipped, operation,
+                                                                state)
 
       if candidates.empty?
         return RoutePlan.new(operation: operation, candidates: [], skipped: skipped, trace: nil)
@@ -46,8 +48,8 @@ module Routing
       validate_permutation!(candidates, ranked_base, choice.strategy)
       ranked = layers.adjust(ranked_base, operation, planning_state)
       validate_permutation!(candidates, ranked, choice.strategy)
-      trace = build_trace(candidates, ranked_base, ranked, operation, planning_state, choice,
-                          rate_limit_note)
+      notes = [capacity_note, rate_limit_note].compact
+      trace = build_trace(candidates, ranked_base, ranked, operation, planning_state, choice, notes)
       RoutePlan.new(operation: operation, candidates: ranked, skipped: skipped, trace: trace)
     end
 
@@ -61,6 +63,45 @@ module Routing
 
     def external_providers
       providers.reject { |provider| provider.name == fallback_provider }
+    end
+
+    # InProgress и Requisites живут в Constraints::REGISTRY (в отличие от
+    # RateLimit) и поэтому уже отработали внутри первого partition выше —
+    # строго, живым состоянием, без всякого смягчения. Это не случайность:
+    # эталонный валидатор организаторов эти два ограничения тоже проверяет
+    # (просто по статическому снапшоту, не по живому счётчику), в отличие от
+    # интенсивности, про которую он не знает вовсе. Строгая живая проверка —
+    # ровно то, чего требует ARCHITECTURE.md §3 и хотел этот пакет.
+    #
+    # Смягчение здесь нужно только на случай, когда живой счётчик отсёк
+    # ВЕСЬ пул: без него заявка ушла бы фолбэку, хотя по статическому снапшоту
+    # (то есть по эталонному допуску организаторов) кандидат есть. Устроено
+    # иначе, чем apply_rate_limit ниже — там фильтр применяется поверх уже
+    # готовых candidates, а здесь пул уже пуст, и единственный источник
+    # кандидатов на восстановление — skipped. Восстанавливаем только тех, кого
+    # срезала именно эта причина и кто прошёл бы допуск целиком (все проверки
+    # REGISTRY, не только эту) на статическом снапшоте — иначе можно вернуть
+    # провайдера, которого срезало бы что-то ещё, и это разошлось бы с
+    # валидатором в другую сторону.
+    def rescue_live_capacity(candidates, skipped, operation, state)
+      return [candidates, skipped, nil] unless candidates.empty? && state
+
+      rescuable, rest = skipped.partition do |provider, violation|
+        capacity_violation?(violation) && Constraints.eligible?(provider, operation, nil)
+      end
+      return [candidates, skipped, nil] if rescuable.empty?
+
+      [rescuable.map(&:first), rest, capacity_not_applied_note(rescuable)]
+    end
+
+    def capacity_violation?(violation)
+      [Constraints::InProgress::REASON, Constraints::Requisites::REASON].include?(violation.reason)
+    end
+
+    def capacity_not_applied_note(rescuable)
+      parts = rescuable.map { |provider, violation| "#{provider.name} #{violation.details}" }
+      "in_progress/requisites: #{parts.join('; ')}, ограничение не применено — " \
+        'других допустимых нет'
     end
 
     # Второй этап отсева, отдельно от REGISTRY. Ограничение по интенсивности
@@ -97,12 +138,12 @@ module Routing
     end
 
     # rubocop:disable-next Metrics/ParameterLists -- входы trace совпадают с этапами планирования.
-    def build_trace(candidates, ranked_base, ranked, operation, state, choice, rate_limit_note)
+    def build_trace(candidates, ranked_base, ranked, operation, state, choice, notes)
       return nil if candidates.empty?
 
       segments = [choice.details, choice.strategy.explain(ranked_base, operation, state)]
       segments.concat(layers.explain(ranked_base, ranked, operation, state)) unless layers.empty?
-      segments << rate_limit_note if rate_limit_note
+      segments.concat(notes)
       PlanTrace.new(strategy_name: choice.strategy.name, segments: segments)
     end
   end

@@ -9,8 +9,9 @@ module OfflineSpecHelpers
   def offline_context(seed: '42', queue: 'operations_queue_10.json')
     providers = Io::ProvidersLoader.load(reference_path('providers.json'))
     operations = Io::QueueLoader.load(reference_path(queue)).operations
+    history = Io::HistoryLoader.load(reference_path('operations_history.csv'))
     outcomes = Execution::OutcomeSource::Deterministic.new(
-      seed: seed, conversions: Io::HistoryLoader.load(reference_path('operations_history.csv'))
+      seed: seed, outcome_table: history.to_outcome_table
     )
     [providers, operations, outcomes]
   end

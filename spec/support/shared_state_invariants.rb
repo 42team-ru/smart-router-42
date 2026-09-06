@@ -83,13 +83,18 @@ RSpec.shared_examples 'state invariants' do
     expect(names.uniq.size).to eq(names.size)
   end
 
-  # rubocop:disable-next RSpec/ExampleLength -- per-provider проход + логика expired-winner
-  it '#2 in_progress возвращён к исходному для всех провайдеров, кроме expired-winner' do
-    winner = outcome.selected&.name
-    held_by_expired = outcome.result == :expired ? winner : nil
+  # rubocop:disable-next RSpec/ExampleLength -- per-provider проход + логика held-провайдеров
+  it '#2 in_progress возвращён к исходному для всех провайдеров, кроме held таймаутом' do
+    # Держится резерв любого провайдера с фактическим result: expired в
+    # attempts -- не только у итогового selected. При on_timeout: :continue
+    # каскад может пройти таймаут и всё равно закончиться на другом
+    # провайдере (approved у следующего или fallback-попытка на
+    # spacepayments) -- таймаут-провайдер остаётся held независимо от этого.
+    expired_attempts = outcome.attempts.select { |a| a.result == 'expired' }
+    held_by_expired = expired_attempts.map { |a| a.provider.name }
 
     initial_snapshot.each do |name, snap|
-      next if name == held_by_expired
+      next if held_by_expired.include?(name)
 
       expect(state_after.in_progress_count(name))
         .to eq(snap.fetch(:in_progress_count)),

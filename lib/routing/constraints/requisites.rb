@@ -19,17 +19,33 @@ module Routing
     #
     # Реквизиты — единственный ресурс провайдера, который в текущей модели не
     # расходуется по ходу очереди: считается, что канал освобождается быстрее,
-    # чем мы успеваем его исчерпать (см. State::Providers#available_requisites).
+    # чем мы успеваем его исчерпать (см. State::Providers#available_requisites,
+    # ни одна мутация состояния это поле не трогает).
+    #
+    # Тем не менее читаем его так же, как DailyLimit и InProgress: если
+    # передано состояние прогона, значение берётся из него, а не из снимка
+    # провайдера, — чтобы источник данных был единым для всех троих проверок,
+    # а не потому, что это поле меняется по ходу очереди сегодня. Без
+    # состояния (офлайн-расчёт, Routing::Achievable, Reporting) считается по
+    # снимку, как раньше.
     class Requisites < Base
       REASON = 'no_requisites'
 
-      def self.violation(provider, _operation, _state)
-        requisites = provider.available_requisites
+      def self.violation(provider, _operation, state)
+        requisites = live_requisites(provider, state)
         return nil if requisites&.positive?
 
         Violation.new(reason: REASON,
                       details: Details.no_requisites(requisites.nil? ? 0 : requisites))
       end
+
+      def self.live_requisites(provider, state)
+        return state.available_requisites(provider.name) if state.respond_to?(:available_requisites)
+
+        provider.available_requisites
+      end
+
+      private_class_method :live_requisites
     end
   end
 end

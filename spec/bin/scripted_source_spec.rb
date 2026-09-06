@@ -164,7 +164,11 @@ RSpec.describe 'bin/route --outcomes scripted' do
   end
 
   describe 'always_fail' do
-    it 'доступен из CLI и исчерпывает каскад без ухода в spacepayments' do
+    # Дефолт cascade.exhausted -- last_candidate (эталон
+    # reference_decisions.json/`make validate`) -- всегда отказывающий
+    # always_fail НЕ доезжает до spacepayments: каскад заканчивается на
+    # последнем реальном кандидате с его фактическим (rejected) результатом.
+    it 'доступен из CLI и на дефолтном каскаде НЕ доезжает до spacepayments' do
       Dir.mktmpdir do |tmp|
         _stdout, _stderr, status = run_route(queue_path, '--outcomes', 'always_fail',
                                              '--out-dir', tmp)
@@ -173,6 +177,25 @@ RSpec.describe 'bin/route --outcomes scripted' do
         decisions = decisions_in(tmp)
         expect(decisions).to all(include('simulated_result' => 'rejected'))
         expect(decisions.map { |d| d['selected_provider'] }).not_to include('spacepayments')
+      end
+    end
+
+    # Буквальное прочтение ТЗ (exhausted: fallback_provider) остаётся доступно
+    # через конфиг -- регресс-проверка, что переключатель по-прежнему
+    # работает, а не только дефолт.
+    it 'exhausted: fallback_provider — исчерпанный каскад доезжает до spacepayments' do
+      Dir.mktmpdir do |tmp|
+        config = File.join(tmp, 'fallback_provider.yml')
+        File.write(config, "strategy: count_share\nfallback_provider: spacepayments\n" \
+                           "cascade:\n  exhausted: fallback_provider\n")
+
+        _stdout, _stderr, status = run_route(queue_path, '--outcomes', 'always_fail',
+                                             '--config', config, '--out-dir', tmp)
+        expect(status.exitstatus).to eq(0)
+
+        decisions = decisions_in(tmp)
+        expect(decisions).to all(include('simulated_result' => 'rejected'))
+        expect(decisions.map { |d| d['selected_provider'] }).to all(eq('spacepayments'))
       end
     end
   end

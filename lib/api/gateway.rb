@@ -225,31 +225,38 @@ module Api
       when 'deterministic'
         Execution::OutcomeSource::Deterministic.new(
           seed: outcomes['seed'] || '42',
-          conversions: outcome_conversions(outcomes)
+          outcome_table: outcome_table(outcomes)
         )
       else
         raise ArgumentError, "unknown outcomes.source #{source.inspect}"
       end
     end
 
-    def outcome_conversions(outcomes)
-      if outcomes['calibrate_from_history']
-        history_data
-      else
-        @providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
-      end
+    # Паспортная таблица строится всегда и для всех провайдеров -- калибровка
+    # из истории (если включена) накладывается поверх, а не заменяет её:
+    # провайдер без истории (например, self-provider фолбэка) обязан остаться
+    # на паспортном conversion_24h, а не свалиться в скалярный дефолт
+    # Execution::OutcomeSource::Deterministic::DEFAULT_OUTCOME (approved_bp: 0).
+    def outcome_table(outcomes)
+      passport = Execution::OutcomeSource::Deterministic.passport_outcome_table(@providers)
+      return passport unless outcomes['calibrate_from_history']
+
+      passport.merge(history_outcome_table)
     end
 
-    def history_data
-      Io::HistoryLoader.load(@service_config.history_path)
+    # smoothing здесь всегда включён (дефолт Io::HistoryLoader) -- у
+    # сервисного конфига (Config::ServiceConfig) нет своего outcomes.smoothing,
+    # это настройка боевого routing.yml, а не HTTP-сервиса.
+    def history_outcome_table
+      Io::HistoryLoader.load(@service_config.history_path).to_outcome_table
     rescue StandardError
-      @providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
+      {}
     end
 
     def history_for_report
       Io::HistoryLoader.load(@service_config.history_path)
     rescue StandardError
-      {}
+      Reporting::ReportBuilder::EMPTY_HISTORY
     end
 
     def seed_int

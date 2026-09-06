@@ -17,9 +17,16 @@ RSpec.describe Offline::Oracle do
     end
   end
 
+  # delivered на seed 42 — 9, а не 10: пер-провайдерные approved_bp/rejected_bp
+  # из сглаженной истории (Io::HistoryLoader) заменили прежний плоский
+  # reject_share=500 бп на всех — по конкретному брошенному хешу для этой
+  # заявки исход сместился из approved в rejected. Смещение синхронное для
+  # offline_bound и our_online_result (competitive_ratio остаётся 1.0), это не
+  # расхождение online/offline, а честная перекалибровка симулятора.
   it 'даёт ожидаемые блоки для калиброванных seed 7 и 42' do
-    expectations = { '7' => 15.0, '42' => 5.0 }
-    expectations.each do |seed, deviation|
+    expectations = { '7' => { deviation: 15.0, delivered: 10 },
+                     '42' => { deviation: 5.0, delivered: 9 } }
+    expectations.each do |seed, expected|
       providers, operations, outcomes = offline_context(seed: seed)
       simulation = Offline::Simulation.new(providers: providers, outcomes: outcomes)
       ours = simulation.run(operations, online_assignment)
@@ -28,11 +35,13 @@ RSpec.describe Offline::Oracle do
       block = Offline::BenchmarkBlock.build(bound: bound.metrics, ours: ours,
                                             total: operations.size, seed: seed)
 
-      expect(block).to include('offline_bound' => include('max_deviation_pp' => deviation,
-                                                          'delivered' => 10),
-                               'our_online_result' => include('max_deviation_pp' => deviation,
-                                                              'delivered' => 10),
-                               'competitive_ratio' => 1.0)
+      expect(block).to include(
+        'offline_bound' => include('max_deviation_pp' => expected.fetch(:deviation),
+                                   'delivered' => expected.fetch(:delivered)),
+        'our_online_result' => include('max_deviation_pp' => expected.fetch(:deviation),
+                                       'delivered' => expected.fetch(:delivered)),
+        'competitive_ratio' => 1.0
+      )
     end
   end
 

@@ -8,6 +8,10 @@ module Reporting
   #                              == 'selected'), а не эл. отсев -- нагрузка
   #                              на провайдера и наблюдаемая конверсия.
   module Distributions
+    # achievable -- Routing::Achievable.for_queue для weight == :count,
+    # Routing::Achievable.for_volume для weight == :amount. Формы записей
+    # разные (achievable_seats/achievable_amount), но обе несут achievable_bp,
+    # и только он используется здесь -- секции читают один и тот же метод.
     def self.by_final(pairs, providers, weight, achievable = {})
       total = weight == :count ? pairs.size : pairs.sum { |operation, _| operation.amount }
 
@@ -41,7 +45,7 @@ module Reporting
 
     def self.targets(provider, weight, achievable, share_pct)
       target_pct = target_of(provider, weight)
-      achievable_pct = achievable_pct(provider, weight, achievable)
+      achievable_pct = achievable_pct(provider, achievable)
 
       {
         'target_pct' => target_pct,
@@ -65,16 +69,15 @@ module Reporting
 
     # Отклонение меряется ОТ ДОСТИЖИМОЙ доли, а не от паспортной. На десяти
     # заявках доля квантуется шагом 10 п.п., в 35% попасть нельзя в принципе, и
-    # разница цель/достижимое -- арифметический пол, а не промах движка. Там,
-    # где достижимого нет (объём, spacepayments), меряем от цели: другой опоры
-    # просто нет.
-    # Достижимую долю считает Routing::Achievable, и считает он места в
-    # очереди, а не деньги. Поэтому в volume_distribution поля нет -- null
-    # честнее копии цели. У spacepayments его тоже нет: fallback исключён из
-    # расчёта по допуску, а не по исходу.
-    def self.achievable_pct(provider, weight, achievable)
-      return nil unless weight == :count
-
+    # разница цель/достижимое -- арифметический пол, а не промах движка.
+    #
+    # По объёму достижимое считает Routing::Achievable.for_volume -- та же
+    # база, что и по количеству, только приближённая (см. комментарий у
+    # for_volume): верхняя граница провайдера — оценка сверху, а не точный
+    # рюкзак. У spacepayments достижимого нет в обеих секциях: fallback
+    # исключён из расчёта по допуску, а не по исходу, null здесь честнее
+    # копии цели.
+    def self.achievable_pct(provider, achievable)
       entry = achievable[provider.name]
       return nil if entry.nil?
 

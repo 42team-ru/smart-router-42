@@ -6,10 +6,17 @@
 # Использование:
 #   bin/route <queue.json> [--out-dir DIR] [--providers PATH] [--config PATH]
 #             [--strategy NAME] [--outcomes NAME] [--seed SEED] [--script PATH]
+#             [--[no-]offline-analytics]
 #
 # Источники исходов: deterministic (боевой, хеш от seed), scripted (исход каждой
 # пары задан в YAML — для демо и разбора конкретного случая), always_ok и
 # always_fail (вырожденные, для тестов каскада).
+#
+# Офлайн-аналитика (оракул + сравнение конфигураций, lib/offline/*) не влияет
+# ни на одно решение и стоит десятки секунд на больших очередях (см. комментарий
+# у OFFLINE_ANALYTICS_MAX_OPS_DEFAULT ниже). Выше порога offline_analytics.max_operations
+# из конфига она не считается по умолчанию; --offline-analytics/--no-offline-analytics
+# перекрывает порог в обе стороны, как --oracle в bin/bench.
 #
 # Поведение задаёт config/routing.yml — bin/route читает его на старте, один
 # раз, и передаёт объектом в Routing::Assembly. Ни Planner, ни стратегии
@@ -37,12 +44,16 @@ require_relative '../lib/routing/share_ledger'
 require_relative '../lib/routing/strategies'
 require_relative '../lib/state/providers'
 require_relative '../lib/execution/executor'
+require_relative '../lib/execution/pending_resolver'
+require_relative '../lib/execution/pending_resolution_pass'
 require_relative '../lib/execution/outcome_source/always_ok'
 require_relative '../lib/execution/outcome_source/deterministic'
 require_relative '../lib/execution/outcome_source/always_fail'
 require_relative '../lib/execution/outcome_source/scripted'
 require_relative '../lib/reporting/decisions_writer'
 require_relative '../lib/reporting/report_builder'
+require_relative '../lib/reporting/utilization'
+require_relative '../lib/reporting/pending_resolution_summary'
 require_relative '../lib/reporting/console_summary'
 require_relative '../lib/offline/objective'
 require_relative '../lib/offline/oracle'
@@ -57,6 +68,21 @@ Routing::Layers.load_all!
 
 DECISIONS_FILENAME = 'routing_decisions_test.json'
 REPORT_FILENAME = 'routing_report_test.json'
+
+# Порог размера очереди, выше которого офлайн-эталон (Offline::Oracle) и
+# офлайн-сравнение конфигураций (Offline::Comparison) не считаются по
+# умолчанию. Обоснование из замеров (пакет 4, 100 000 операций, реальные
+# data/providers.json): полный прогон 28.6 с, из них 20 с (70%) — офлайн-
+# аналитика (оракул 7.9 с, сравнение трёх конфигураций 12.1 с), которая не
+# входит ни в одно решение. На 10 000 операций та же аналитика укладывается в
+# единицы секунд и не мешает демонстрации — отсюда порог. Совпадает с
+# ORACLE_AUTO_MAX_OPS в bin/bench намеренно: те же порядки величин, тот же
+# смысл границы, держим согласованно.
+#
+# Значение — только дефолт на отсутствующий ключ конфига offline_analytics.max_operations
+# (Config::SchemaRules.validate_offline_analytics!); реальный порог правится
+# в config/routing.yml без изменения кода.
+OFFLINE_ANALYTICS_MAX_OPS_DEFAULT = 10_000
 
 def usage
   'Использование: bin/route <queue.json> [--out-dir DIR] [--providers PATH] ' \
@@ -96,6 +122,10 @@ def add_options(opts, options)
   end
   add_routing_options(opts, options)
   add_outcome_options(opts, options)
+  opts.on('--[no-]offline-analytics',
+          'Оракул + сравнение конфигураций поверх порога offline_analytics.max_operations') do |v|
+    options[:offline_analytics] = v
+  end
 end
 
 def build_option_parser(options)
@@ -115,8 +145,11 @@ def default_options
   # reference/data/providers.json. Пристинный файл организаторов остаётся
   # эталоном допуска для make validate; --providers reference/data/providers.json
   # по-прежнему доступен явным флагом.
+  # offline_analytics: nil -- как strategy, приоритет флагу отдаётся только
+  # когда он реально передан (see offline_analytics_enabled? ниже); nil здесь
+  # означает «решает порог из конфига», а не «выключено».
   { out_dir: 'out', providers_path: 'data/providers.json',
-    config_path: 'config/routing.yml', outcomes: nil, seed: nil }
+    config_path: 'config/routing.yml', outcomes: nil, seed: nil, offline_analytics: nil }
 end
 
 def parse_args(argv)
@@ -149,8 +182,11 @@ rescue RuntimeError => e
   fail_with(e.message)
 end
 
-def load_history(path)
-  Io::HistoryLoader.load(path)
+# smoothing читается здесь же, а не в outcome_conversions -- outcomes.smoothing
+# управляет самим расчётом Io::HistoryStats (используется и стратегией
+# conversion, и отчётом), а не только порогами Deterministic.
+def load_history(path, config)
+  Io::HistoryLoader.load(path, smoothing: config.outcomes.fetch('smoothing', true))
 rescue RuntimeError => e
   fail_with(e.message)
 end
@@ -172,7 +208,7 @@ def build_outcome_source(options, providers, config, history)
   when 'deterministic'
     Execution::OutcomeSource::Deterministic.new(
       seed: outcome_seed(options, config),
-      conversions: outcome_conversions(config, providers, history)
+      outcome_table: outcome_table(config, providers, history)
     )
   else
     fail_with("Неизвестный источник исходов #{outcome_source_name(options, config).inspect}; " \
@@ -215,14 +251,30 @@ end
 # Значения уже прошли Config::SchemaError на этапе загрузки конфига
 # (SchemaRules.validate_cascade!), поэтому здесь только дефолт на
 # отсутствующий подключ -- как outcome_source_name/outcome_seed выше.
+#
+# Дефолты -- last_candidate и stop, как в самом config/routing.yml (см.
+# комментарий у cascade: там -- это факт, проверенный reference_decisions.json
+# и `make validate`, а не вкусовой выбор). Должны совпадать с дефолтами в
+# config/routing.yml -- расхождение молча меняет боевое поведение мимо конфига.
 def cascade_exhausted(config) = config.cascade.fetch('exhausted', 'last_candidate').to_sym
 
 def cascade_on_timeout(config) = config.cascade.fetch('on_timeout', 'stop').to_sym
 
-def outcome_conversions(config, providers, history)
-  return history if config.outcomes.fetch('calibrate_from_history', false)
+# calibrate_from_history: true -- outcome_table из Io::HistoryStats (уже
+# сглаженные approved_bp/rejected_bp на провайдера, Io::HistoryLoader),
+# наложенные ПОВЕРХ паспортной таблицы, а не вместо неё. spacepayments в
+# operations_history.csv нет вовсе (это self-provider фолбэка, а не участник
+# обычного каскада) -- без паспортной подложки он получил бы скалярный
+# дефолт Execution::OutcomeSource::Deterministic::DEFAULT_OUTCOME (approved_bp:
+# 0), то есть НИКОГДА не одобрял бы, что превращает предсказуемый
+# "фолбэк почти всегда approved" в подобие ещё одного ненадёжного провайдера.
+# Паспортная таблица строится для ВСЕХ провайдеров снапшота заранее и
+# перекрывается калиброванными записями только там, где история реально есть.
+def outcome_table(config, providers, history)
+  passport = Execution::OutcomeSource::Deterministic.passport_outcome_table(providers)
+  return passport unless config.outcomes.fetch('calibrate_from_history', false)
 
-  providers.to_h { |provider| [provider.name, provider.conversion_24h.to_f] }
+  passport.merge(history.to_outcome_table)
 end
 
 def first_ranked_attempt?(attempt, plan)
@@ -291,11 +343,39 @@ def build_pairs(operations, providers, options, inputs)
   pipeline = build_pipeline(providers, options, inputs[:strategy], inputs[:selector],
                             inputs[:config].fallback_provider, inputs[:layers],
                             inputs[:config], inputs[:history])
-  [operations.map { |operation| route_operation(operation, pipeline) }, pipeline[:outcomes]]
+  pairs = operations.map { |operation| route_operation(operation, pipeline) }
+  [pairs, pipeline[:outcomes], pipeline[:state]]
+end
+
+# Дефолт -- включено, обоснование в комментарии у ключа pending_resolution в
+# config/routing.yml. Здесь -- только дефолт на отсутствующий подключ
+# enabled, как offline_analytics_enabled?/cascade_exhausted выше.
+def pending_resolution_enabled?(config)
+  config.pending_resolution.fetch('enabled', true)
+end
+
+# Второй проход строго после всей очереди (вызывается из main уже после
+# build_pairs целиком) -- решения первого прохода в pairs не трогает, только
+# читает их, чтобы найти held-резервы, и мутирует state, освобождая ёмкость.
+# utilization_before -- тот же расчёт, что уже идёт в основной отчёт
+# (projected_daily_utilization), взятый ДО статус-чека, чтобы секция отчёта
+# показывала дельту, а не пересчитывала первый проход заново.
+def build_pending_resolution(pairs, state, outcomes, providers)
+  utilization_before = Reporting::Utilization.projected_daily(pairs, providers)
+  report = Execution::PendingResolutionPass.new(outcomes: outcomes, providers: providers)
+                                           .call(pairs, state)
+  Reporting::PendingResolutionSummary.build(report, utilization_before, providers)
+end
+
+def maybe_build_pending_resolution(pairs, state, outcomes, inputs)
+  return nil unless pending_resolution_enabled?(inputs[:config])
+
+  build_pending_resolution(pairs, state, outcomes, inputs[:providers])
 end
 
 # rubocop:disable-next Metrics/ParameterLists -- сформированные секции отчёта передаются явно.
-def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, comparison: nil)
+def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, comparison: nil,
+                  pending_resolution: nil)
   FileUtils.mkdir_p(out_dir)
   decisions_path = File.join(out_dir, DECISIONS_FILENAME)
   report_path = File.join(out_dir, REPORT_FILENAME)
@@ -303,10 +383,56 @@ def write_outputs(out_dir, pairs, providers, history, strategy, benchmark: nil, 
   Reporting::DecisionsWriter.write(decisions_path, pairs)
   Reporting::ReportBuilder.write(
     report_path, pairs, providers: providers, history: history, strategy: strategy.name,
-                        benchmark: benchmark, comparison: comparison
+                        benchmark: benchmark, comparison: comparison,
+                        pending_resolution: pending_resolution
   )
 
   [decisions_path, report_path]
+end
+
+# Порог решает офлайн_аналитику целиком (и оракул, и comparison) -- обе части
+# дорогие сами по себе (см. OFFLINE_ANALYTICS_MAX_OPS_DEFAULT) и обе не влияют
+# ни на одно решение, отключать их порознь незачем. Приоритет источников как
+# у остальных override в этом файле (--strategy, --seed): флаг CLI, если он
+# передан явно, > YAML > дефолт в коде.
+def offline_analytics_max_ops(config)
+  config.offline_analytics.fetch('max_operations', OFFLINE_ANALYTICS_MAX_OPS_DEFAULT)
+end
+
+def offline_analytics_enabled?(options, config, total_operations)
+  return options[:offline_analytics] unless options[:offline_analytics].nil?
+
+  total_operations <= offline_analytics_max_ops(config)
+end
+
+# Пропуск обязан быть виден: строка в STDOUT (этот метод) и явная пометка в
+# самом отчёте (skipped_offline_analytics_benchmark ниже) -- отчёт, где секция
+# молча исчезла, хуже отчёта, где написано, почему её нет.
+def warn_offline_analytics_skipped(total_operations, max_ops)
+  puts 'офлайн-аналитика (эталон + сравнение конфигураций) пропущена: ' \
+       "#{total_operations} операций > порога #{max_ops} " \
+       '(offline_analytics.max_operations в конфиге); включить явно -- флаг --offline-analytics'
+end
+
+def offline_analytics_skip_note(total_operations, max_ops)
+  "эталон и сравнение конфигураций не считались: #{total_operations} операций " \
+    "больше порога #{max_ops} (offline_analytics.max_operations); включить явно -- " \
+    'флаг --offline-analytics'
+end
+
+# Та же форма секции benchmark, что и у Offline::BenchmarkBlock (offline_bound/
+# our_online_result/competitive_ratio/note), плюс структурные поля причины --
+# status/total_operations/max_operations считываются программно, а не только
+# из текста note. comparison в этом случае -- nil (build_comparison уже умеет
+# такое для пустого ключа `comparison` в конфиге, здесь используется тот же
+# путь: секции в отчёте нет вовсе).
+def skipped_offline_analytics_benchmark(total_operations, max_ops)
+  {
+    'offline_bound' => nil, 'our_online_result' => nil, 'competitive_ratio' => nil,
+    'status' => 'skipped_queue_too_large', 'total_operations' => total_operations,
+    'max_operations' => max_ops,
+    'note' => offline_analytics_skip_note(total_operations, max_ops)
+  }
 end
 
 # rubocop:disable-next Metrics/MethodLength, Metrics/AbcSize
@@ -404,7 +530,7 @@ def load_inputs(options)
   # История читается один раз здесь и раздаётся всем, кому нужна: источнику
   # исходов (пороги конверсии), стратегии conversion (порядок кандидатов) и
   # отчёту. Путь берётся из конфига, ключ history_path.
-  history = load_history(config.history_path)
+  history = load_history(config.history_path, config)
   {
     providers: providers,
     operations: load_queue(options[:queue_path]),
@@ -416,20 +542,35 @@ def load_inputs(options)
   }
 end
 
+# Гейт для дорогой офлайн-аналитики целиком (см. offline_analytics_enabled?).
+# Ниже порога -- поведение как раньше, benchmark/comparison настоящие. Выше
+# порога и без явного --offline-analytics -- benchmark несёт пометку причины
+# (status: skipped_queue_too_large), comparison -- nil (та же законная форма
+# отсутствия секции, что и у пустого ключа `comparison` в конфиге).
+def build_offline_analytics(pairs, inputs, outcomes, options)
+  total = inputs[:operations].size
+  return [build_benchmark(pairs, inputs, outcomes, options), build_comparison(inputs)] if
+    offline_analytics_enabled?(options, inputs[:config], total)
+
+  max_ops = offline_analytics_max_ops(inputs[:config])
+  warn_offline_analytics_skipped(total, max_ops)
+  [skipped_offline_analytics_benchmark(total, max_ops), nil]
+end
+
 # rubocop:disable-next Metrics/AbcSize, Metrics/MethodLength
 def main(argv)
   options = parse_args(argv)
   inputs = load_inputs(options)
 
-  pairs, outcomes = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
-  benchmark = build_benchmark(pairs, inputs, outcomes, options)
-  comparison = build_comparison(inputs)
+  pairs, outcomes, state = build_pairs(inputs[:operations], inputs[:providers], options, inputs)
+  pending_resolution = maybe_build_pending_resolution(pairs, state, outcomes, inputs)
+  benchmark, comparison = build_offline_analytics(pairs, inputs, outcomes, options)
   decisions_path, report_path = write_outputs(
     options[:out_dir], pairs, inputs[:providers], inputs[:history], inputs[:strategy],
-    benchmark: benchmark, comparison: comparison
+    benchmark: benchmark, comparison: comparison, pending_resolution: pending_resolution
   )
 
-  print_console_summary(pairs, inputs, benchmark, comparison)
+  print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution)
 
   puts "Прочитано операций: #{inputs[:operations].size}"
   puts "Записано: #{decisions_path}"
@@ -441,11 +582,14 @@ end
 # офлайн-сравнение) в benchmark/comparison уже посчитана один раз в
 # build_benchmark/build_comparison и передаётся сюда готовыми хешами,
 # повторно не считается -- пересчитывается только дешёвая часть
-# (distribution/achievable/deviation_causes/recommendations).
-def print_console_summary(pairs, inputs, benchmark, comparison)
+# (distribution/achievable/deviation_causes/recommendations). pending_resolution
+# тоже готовый хеш (или nil, когда второй проход выключен) -- второй проход
+# по held-резервам здесь не повторяется, он мутировал state один раз в main.
+def print_console_summary(pairs, inputs, benchmark, comparison, pending_resolution)
   report = Reporting::ReportBuilder.build(
     pairs, providers: inputs[:providers], history: inputs[:history],
-           strategy: inputs[:strategy].name, benchmark: benchmark, comparison: comparison
+           strategy: inputs[:strategy].name, benchmark: benchmark, comparison: comparison,
+           pending_resolution: pending_resolution
   )
 
   Reporting::ConsoleSummary.operation_lines(pairs).each { |line| puts line }

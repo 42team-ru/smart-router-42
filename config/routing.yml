@@ -31,6 +31,12 @@ outcomes:
   source: deterministic
   seed: 42
   calibrate_from_history: true
+  # Сглаживание approved/rejected/expired к общему среднему (partial pooling,
+  # см. Io::HistoryLoader) — включено по умолчанию: payflow в
+  # operations_history.csv всего 19 наблюдений, сырая доля на такой выборке
+  # статистически шаткая. false — сырые approved/всего без поправки на размер
+  # выборки, для сравнения эффекта на защите.
+  smoothing: true
 
 amount_ranges:
   - { from: 500, to: 50000, prefer: payflow }
@@ -46,17 +52,68 @@ rate_limits:
   payflow: 10
   quickpay: 15
 
-# Обе трактовки ТЗ доступны переключателем, дефолты — сегодняшнее поведение
-# (записаны явно, а не подразумеваются молчаливым отсутствием ключа).
+# Обе трактовки ТЗ доступны переключателем, дефолты записаны явно, а не
+# подразумеваются молчаливым отсутствием ключа.
 #   exhausted: last_candidate (дефолт) | fallback_provider
 #   on_timeout: stop (дефолт) | continue
-# Альтернативные значения ломают детерминированные кейсы валидатора на
-# публичной очереди — в боевом прогоне не менять.
+#
+# Дефолт проверяется фактом, не вкусом: reference/data/reference_decisions.json
+# (deterministic_cases) требует selected_provider=quickpay на op_103 и op_104
+# — единственный допустимый кандидат там (quickpay) отвечает таймаутом.
+# on_timeout: continue увёл бы каскад дальше и подставил бы spacepayments,
+# exhausted: fallback_provider сделал бы то же самое поверх исчерпанного
+# каскада — обе замены расходятся с эталоном организаторов и валят
+# `make validate` (op_103, op_104: "выбран spacepayments, ожидался quickpay").
+# on_timeout: stop + exhausted: last_candidate — единственная пара, которая
+# держит selected_provider = quickpay и проходит `make validate`.
+#
+# Дефолт осмысленен и по существу, не только по валидатору: таймаут означает
+# «результат неизвестен», а не «отказ» — провайдер мог и провести платёж,
+# просто не успел ответить вовремя. Отправка той же операции следующему
+# провайдеру — риск двойной выплаты клиенту, который дороже одной задержанной
+# операции. Резерв в этом случае всё равно держится (State#hold) и закрывается
+# только статус-чеком (Execution::PendingResolver), не повторной попыткой.
+#
+# Буквальное прочтение ТЗ (reference/TZ.md, Hard-constraints → Fallback): «при
+# отказе/таймауте — исключить провайдера из пула и выбрать следующего. Если
+# пул пуст — fallback на spacepayments» — доступно явным переключением обоих
+# ключей разом (config/examples/tz_literal.yml).
 cascade:
   exhausted: last_candidate
   on_timeout: stop
 
 fallback_provider: spacepayments
+
+# Второй проход bin/route после ВСЕЙ очереди (не в середине): поздний
+# статус-чек по operations, застрявшим в :expired на первом проходе
+# (Execution::PendingResolutionPass поверх Execution::PendingResolver).
+# Без него State::Providers#hold держит слот in_progress до конца прогона
+# навсегда -- на длинной очереди с реалистичной долей таймаутов (по истории:
+# vipay 9.2%, quickpay 15.2%, payflow 29.0%) ёмкость провайдеров необратимо
+# проседает, потому что Constraints::InProgress/Requisites читают живые
+# счётчики State::Providers, а не паспортный снапшот.
+#
+# enabled: true (дефолт) -- статус-чек стоит одного дополнительного
+# детерминированного вызова того же outcome-источника на каждый held-резерв
+# (чистая функция seed/operation_id/provider/attempt_no, без rand/Time.now),
+# не переписывает уже выпущенные attempts/routing_decisions_test.json (только
+# добавляет секцию pending_resolution в routing_report_test.json) и реально
+# освобождает ёмкость -- это и есть "обновление загрузки" из ТЗ, а не
+# просто более честный отчёт. enabled: false воспроизводит поведение до
+# этого пакета буква в букву (оба выходных файла побайтово те же).
+pending_resolution:
+  enabled: true
+
+# Порог размера очереди для дорогой офлайн-аналитики bin/route (оракул +
+# сравнение конфигураций, оба -- ниже, оба идут только в отчёт/консоль,
+# ни на одно решение не влияют). На 100 000 операций эта пара стоит ~20 с
+# из ~29 с полного прогона; на 10 000 -- единицы секунд, поэтому порог здесь.
+# Выше порога обе секции не считаются (routing_report_test.json несёт явную
+# пометку в benchmark.status), явное включение -- флаг --offline-analytics.
+# Значение можно изменить здесь без правки кода (bin/route берёт дефолт
+# 10 000 только когда ключ ниже отсутствует вовсе).
+offline_analytics:
+  max_operations: 10000
 
 # Офлайн-сравнение baseline (round_robin) против боевой стратегии
 # (count_share) и против count_share+слои. Постфактум

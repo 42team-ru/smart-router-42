@@ -2,6 +2,7 @@
 
 require 'routing/constraints/requisites'
 require 'routing/reasons'
+require 'state/providers'
 require_relative '../../support/provider_factory'
 
 RSpec.describe Routing::Constraints::Requisites do
@@ -61,5 +62,23 @@ RSpec.describe Routing::Constraints::Requisites do
     violation = described_class.violation(provider, operation, nil)
 
     expect(Routing::Reasons::SKIP).to include(violation.reason)
+  end
+
+  it 'отсеивает провайдера, у которого живой available_requisites == 0, с причиной no_requisites' do
+    live_snapshot = build_provider(available_requisites: 0)
+    state = State::Providers.new([live_snapshot, build_provider(payment_system: 'spacepayments')])
+    stale_provider = build_provider(available_requisites: 12)
+
+    violation = described_class.violation(stale_provider, operation, state)
+
+    expect(violation.reason).to eq('no_requisites')
+  end
+
+  it 'пропускает провайдера, у которого живой available_requisites положительный' do
+    live_snapshot = build_provider(available_requisites: 5)
+    state = State::Providers.new([live_snapshot, build_provider(payment_system: 'spacepayments')])
+    stale_provider = build_provider(available_requisites: 0)
+
+    expect(described_class.violation(stale_provider, operation, state)).to be_nil
   end
 end

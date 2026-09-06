@@ -1,38 +1,177 @@
 # frozen_string_literal: true
 
 require 'csv'
+require_relative 'history_stats'
 
 module Io
-  # Загрузчик operations_history.csv: считает наблюдаемую конверсию провайдеров.
+  # Загрузчик operations_history.csv: три исхода (approved/rejected/expired) на
+  # провайдера, сглаженные к общему среднему по методу Дирихле (partial
+  # pooling / эмпирический Байес — не нейросеть, доверять числу можно и на
+  # бумаге).
   #
-  # Паспортный conversion_24h из providers.json заявлен продавцом и не
-  # совпадает с фактом. Калибровка — это approved / всего записей за
-  # провайдером на всей истории, без деления на approved+rejected: expired
-  # тоже расход возможности провайдера.
+  # Раньше калибровка была "approved / всего", без учёта размера выборки: у
+  # payflow в reference/data/operations_history.csv всего 19 наблюдений, у
+  # vipay — 41, а делёж давал одинаково уверенные на вид доли. 95%-й интервал
+  # Уилсона для 9/19 — примерно [0.27, 0.68], шире всего разброса между
+  # провайдерами; воспринимать 0.474 как точную цифру нечестно.
+  #
+  # Формула на провайдера:
+  #   p(исход) = (счётчик_исхода + pooled_исход × k) / (n_провайдера + k)
+  # pooled_исход — доля исхода по ВСЕЙ истории (все провайдеры вместе). При
+  # маленькой выборке (n << k) оценка тянется к pooled_исход; при большой
+  # (n >> k) сжатие исчезает само — это и есть суть partial pooling.
+  #
+  # k не подобран на глаз, а выведен из данных методом моментов:
+  #   k = mu × (1 − mu) / var − 1
+  # mu — общая доля approved по всей истории (сумма approved / сумма всех
+  # наблюдений, а не среднее по провайдерам — крупная выборка должна весить
+  # больше). var — дисперсия ДОЛЕЙ approved МЕЖДУ ПРОВАЙДЕРАМИ (по числу
+  # провайдеров, то есть смещённая оценка: var = Σ(p_i − mu)² / N). Смысл: чем
+  # сильнее провайдеры на самом деле отличаются друг от друга (большой var),
+  # тем меньше оснований тянуть их друг к другу (маленький k), и наоборот.
+  #
+  # Всё считается через Rational — решающий путь дробей во float не терпит
+  # (scripts/check_determinism.sh и общий инвариант проекта), а сглаживание по
+  # природе своей дробное. В базисные пункты (approved_bp/rejected_bp/
+  # expired_bp) переводим только на выходе, округляя Rational#round.
   module HistoryLoader
-    def self.load(path)
-      totals = Hash.new(0)
-      approved = Hash.new(0)
+    STATUSES = %i[approved rejected expired].freeze
+    BASIS_POINTS = 10_000
 
-      each_row(path) do |row|
-        payment_system = row['payment_system']
-        totals[payment_system] += 1
-        approved[payment_system] += 1 if row['status'] == 'approved'
-      end
-
-      totals.to_h do |payment_system, total|
-        [payment_system, conversion(approved, payment_system, total)]
-      end
+    # outcomes.smoothing: false в конфиге — сырые доли без Дирихле, чтобы на
+    # защите можно было сравнить эффект сглаживания явным переключением. k
+    # всё равно считается (нужен для отображения), но не участвует в
+    # approved_bp/rejected_bp/expired_bp.
+    def self.load(path, smoothing: true)
+      build_stats(tally(path), smoothing: smoothing)
     end
 
-    def self.conversion(approved, payment_system, total)
-      (approved[payment_system].to_f / total).round(3)
+    def self.tally(path)
+      counts = Hash.new { |hash, name| hash[name] = Hash.new(0) }
+      each_row(path) { |row| tally_row(counts, row) }
+      counts
     end
+    private_class_method :tally
+
+    def self.tally_row(counts, row)
+      payment_system = row['payment_system']
+      status = row['status']
+      validate_status!(payment_system, status)
+      counts[payment_system][status.to_sym] += 1
+    end
+    private_class_method :tally_row
+
+    def self.validate_status!(payment_system, status)
+      return if STATUSES.map(&:to_s).include?(status)
+
+      raise "operations_history.csv: неизвестный статус #{status.inspect} " \
+            "у #{payment_system.inspect}; допустимы #{STATUSES.join(', ')}"
+    end
+    private_class_method :validate_status!
+
+    def self.build_stats(counts, smoothing:)
+      totals = totals_by_provider(counts)
+      total_obs = totals.values.sum
+
+      return Io::HistoryStats.new(entries: {}, k: 0, smoothed: smoothing) if total_obs.zero?
+
+      pooled = pooled_shares(counts, total_obs)
+      k_value = k_from_moments(counts, totals, pooled.fetch(:approved))
+      entries = counts.to_h do |name, outcome_counts|
+        [name,
+         build_entry(outcome_counts, totals.fetch(name), pooled, k_value, smoothing: smoothing)]
+      end
+      Io::HistoryStats.new(entries: entries, k: k_value, smoothed: smoothing)
+    end
+    private_class_method :build_stats
+
+    def self.totals_by_provider(counts)
+      counts.transform_values { |outcome_counts| outcome_counts.values.sum }
+    end
+    private_class_method :totals_by_provider
+
+    # pooled_исход = доля исхода по всей истории сразу (сумма счётчиков исхода
+    # по всем провайдерам / сумма всех наблюдений) — общий знаменатель для
+    # приора Дирихле.
+    def self.pooled_shares(counts, total_obs)
+      STATUSES.to_h do |status|
+        total = counts.values.sum { |outcome_counts| outcome_counts[status] }
+        [status, Rational(total, total_obs)]
+      end
+    end
+    private_class_method :pooled_shares
+
+    # k = mu(1-mu)/var - 1, метод моментов. var считается вокруг ТОГО ЖЕ mu
+    # (общая доля approved по всей истории), а не вокруг среднего долей
+    # провайдеров — иначе k не совпадёт с контрольными числами и не будет
+    # согласован с pooled-долями, к которым и идёт сглаживание.
+    #
+    # var == 0 (0 или 1 провайдер в истории, либо у всех совпадающая доля) —
+    # разброса измерить не из чего, k = 0 (сглаживание вырождается в сырые
+    # доли — с одним провайдером тянуть не к чему, это не костыль, а точный
+    # предел формулы). Отрицательный k (var больше, чем допускает биномиальная
+    # дисперсия при общем mu) — тоже 0: пула, к которому имеет смысл тянуть,
+    # попросту нет, случай не покрыт контрольными числами, но не должен ронять
+    # загрузку.
+    def self.k_from_moments(counts, totals, mu_rate)
+      return 0 if counts.size < 2
+
+      var = variance_of_approved_shares(counts, totals, mu_rate)
+      return 0 if var.zero?
+
+      raw = (mu_rate * (1 - mu_rate) / var) - 1
+      raw.negative? ? 0 : raw
+    end
+    private_class_method :k_from_moments
+
+    def self.variance_of_approved_shares(counts, totals, mu_rate)
+      sum_of_squares = counts.keys.sum do |name|
+        p_i = Rational(counts[name][:approved], totals.fetch(name))
+        (p_i - mu_rate)**2
+      end
+      sum_of_squares / counts.size
+    end
+    private_class_method :variance_of_approved_shares
+
+    def self.build_entry(outcome_counts, obs, pooled, k_value, smoothing:)
+      bp = STATUSES.to_h do |status|
+        [status, outcome_bp(outcome_counts[status], obs, pooled.fetch(status), k_value, smoothing)]
+      end
+      Io::HistoryStats::Entry.new(
+        n: obs, approved_count: outcome_counts[:approved],
+        rejected_count: outcome_counts[:rejected], expired_count: outcome_counts[:expired],
+        approved_bp: bp.fetch(:approved), rejected_bp: bp.fetch(:rejected),
+        expired_bp: bp.fetch(:expired)
+      )
+    end
+    private_class_method :build_entry
+
+    # Три компоненты (approved/rejected/expired) округляются НЕЗАВИСИМО, а не
+    # через остаток -- сумма по провайдеру может разойтись с 10_000 на ±1 бп
+    # (независимое округление трёх долей иначе не бывает). Это не портит
+    # пороги Deterministic: там используются approved_bp и rejected_bp,
+    # expired всегда "иначе" по остатку броска, а не по этому числу.
+    def self.outcome_bp(raw_count, obs, pooled_share, k_value, smoothing)
+      share = if smoothing
+                smoothed_share(raw_count, obs, pooled_share,
+                               k_value)
+              else
+                Rational(raw_count, obs)
+              end
+      (share * BASIS_POINTS).round
+    end
+    private_class_method :outcome_bp
+
+    def self.smoothed_share(raw_count, obs, pooled_share, k_value)
+      (Rational(raw_count) + (pooled_share * k_value)) / (obs + k_value)
+    end
+    private_class_method :smoothed_share
 
     def self.each_row(path, &)
       CSV.foreach(path, headers: true, &)
     rescue Errno::ENOENT
       raise "Файл истории операций не найден: #{path}"
     end
+    private_class_method :each_row
   end
 end

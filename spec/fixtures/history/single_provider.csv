@@ -1,0 +1,5 @@
+operation_id,created_at,amount,bank,card_brand,payment_system,status,latency_sec
+op_1,2026-07-29T08:00:00+03:00,12000,alfa,,vipay,approved,76
+op_2,2026-07-29T08:01:00+03:00,12000,alfa,,vipay,approved,76
+op_3,2026-07-29T08:02:00+03:00,12000,alfa,,vipay,rejected,6
+op_4,2026-07-29T08:03:00+03:00,12000,alfa,,vipay,expired,300

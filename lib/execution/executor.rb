@@ -12,37 +12,45 @@ module Execution
   #   rejected -> rollback, следующий кандидат
   #   expired  -> hold, дальше зависит от on_timeout (см. ниже)
   #
-  # Два независимых переключателя: дефолты воспроизводят сегодняшнее поведение
-  # побайтово.
+  # Два переключателя ортогональны и композируются: on_timeout решает, идти ли
+  # дальше по каскаду сразу после таймаута; exhausted решает, что делать, когда
+  # каскад дошёл до конца без approved — независимо от того, был по дороге
+  # таймаут или только отказы. Один переключатель не отключает другой молча.
   #
   # exhausted: :last_candidate (дефолт) | :fallback_provider
-  #   Что делать, когда каскад исчерпан обычными отказами (rejected) и никто
-  #   не подтвердил и не отклонил операцию.
-  #   :last_candidate    — как сегодня: selected = последний реальный кандидат,
-  #                        result: :rejected, spacepayments не подключается.
+  #   Что делать, когда каскад дошёл до конца без approved — реального
+  #   кандидата, который бы ещё подтвердил операцию, больше нет.
+  #   :last_candidate    — selected = последний реальный кандидат каскада,
+  #                        result — его фактический исход (обычно rejected;
+  #                        expired, если именно на последнем кандидате случился
+  #                        таймаут и продолжать после него было некуда),
+  #                        spacepayments не подключается.
   #   :fallback_provider — сверх исчерпанного каскада выполняется ещё одна
   #                        попытка на spacepayments (буквальное прочтение ТЗ:
   #                        "если пул пуст — fallback на spacepayments").
+  #                        Применяется на общих основаниях: был ли по дороге
+  #                        таймаут — не важно, поэтому единственный кандидат,
+  #                        ответивший expired при on_timeout: :continue, тоже
+  #                        доводит до fallback-попытки.
   #
   # on_timeout: :stop (дефолт) | :continue
-  #   Что делать при :expired (таймаут) одного из кандидатов.
-  #   :stop     — как сегодня: резерв держится (State#hold), каскад
-  #               прекращается, операция условно успешна.
+  #   Что делать сразу при :expired (таймаут) одного из кандидатов.
+  #   :stop     — цикл прерывается немедленно на этом кандидате: резерв
+  #               держится (State#hold), до конца списка кандидатов дело не
+  #               доходит, exhausted не применяется — каскад не исчерпан, он
+  #               прерван.
   #   :continue — резерв ВСЁ РАВНО держится (это инвариант, освобождать его
-  #               без статус-чека нельзя), но каскад
-  #               идёт к следующему кандидату. Если кто-то из следующих approved
-  #               — он и становится selected. Если все следующие rejected и
-  #               каскад исчерпан — selected становится ПЕРВЫЙ по порядку
-  #               провайдер, на котором был таймаут (result: :expired); правило
-  #               exhausted в этом случае НЕ применяется — каскад не пуст по
-  #               исходам, у нас уже есть условно успешная попытка, а не полный
-  #               отказ. Двойная попытка по одной операции — намеренный риск,
-  #               компенсация — Execution::PendingResolver.
-  #
-  # Каскад исчерпан (ветка :last_candidate) -> selected_provider последний
-  # реальный кандидат, НЕ spacepayments. spacepayments — fallback по допуску
-  # (пустой каскад), а не по исходу -- кроме ветки :fallback_provider,
-  # где это осознанное отступление, зафиксированное конфигом.
+  #               без статус-чека нельзя), но каскад идёт к следующему
+  #               кандидату; таймаут-провайдер остаётся в attempts со своим
+  #               result: expired — последовательность рассмотрения не
+  #               теряется. Если кто-то из следующих approved — он и
+  #               становится selected. Если каскад в итоге дошёл до конца без
+  #               approved — решает exhausted, на общих основаниях (см. выше),
+  #               а не безусловный приоритет таймаут-провайдера. Риск двойной
+  #               выплаты (если позже статус-чек подтвердит и таймаут-
+  #               провайдера, и того, кто выиграл дальше) — намеренный,
+  #               принятый выбором on_timeout: :continue; компенсация —
+  #               Execution::PendingResolver.
   # rubocop:disable Metrics/ClassLength -- два переключателя поверх уже единого
   # конвейера каскада; разрезание класса ради метрики строк потеряло бы
   # связность машины состояний одного прохода по каскаду.
@@ -64,12 +72,10 @@ module Execution
 
     private
 
-    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
+    # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     # -- машина состояний каскада — единый цикл с тремя ветвями исхода плюс
     # переключатель on_timeout; фрагментация вредит связности.
     def run_cascade(plan, operation, state, attempts, total_reviewed)
-      expired_provider = nil
-
       plan.candidates.each_with_index do |provider, i|
         attempt_no = i + 1
         state.reserve(provider, operation)
@@ -86,7 +92,6 @@ module Execution
           return Outcome.new(selected: provider, attempts: attempts, result: :approved)
         when :expired
           state.hold(provider, operation)
-          expired_provider ||= provider
           return Outcome.new(selected: provider, attempts: attempts, result: :expired) if
             @on_timeout == :stop
         when :rejected
@@ -94,24 +99,24 @@ module Execution
         end
       end
 
-      cascade_exhausted(plan, operation, state, attempts, expired_provider)
+      cascade_exhausted(plan, operation, state, attempts)
     end
-    # rubocop:enable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
+    # rubocop:enable Metrics/AbcSize, Metrics/MethodLength
 
-    # Каскад дошёл до конца без approved. Если по дороге был таймаут (только
-    # при on_timeout: :continue — иначе цикл вернулся бы раньше), он побеждает
-    # безусловно: правило exhausted к нему не применяется (см. комментарий у
-    # класса, пункт on_timeout: :continue).
-    def cascade_exhausted(plan, operation, state, attempts, expired_provider)
-      if expired_provider
-        return Outcome.new(selected: expired_provider, attempts: attempts, result: :expired)
-      end
-
+    # Каскад дошёл до конца без approved (иначе run_cascade вернулась бы
+    # раньше). exhausted решает на общих основаниях -- был ли по дороге
+    # таймаут или только отказы, не важно (см. комментарий у класса).
+    # :last_candidate берёт фактический результат последнего кандидата из
+    # attempts.last -- он же plan.candidates.last -- а не подразумевает
+    # rejected: если каскаду было некуда продолжать после таймаута именно на
+    # последнем кандидате, результат остаётся expired.
+    def cascade_exhausted(plan, operation, state, attempts)
       case @exhausted
       when :fallback_provider
         run_cascade_fallback(operation, state, attempts, plan.candidates.size)
       else
-        Outcome.new(selected: plan.candidates.last, attempts: attempts, result: :rejected)
+        Outcome.new(selected: plan.candidates.last, attempts: attempts,
+                    result: attempts.last.result.to_sym)
       end
     end
 

@@ -30,9 +30,15 @@ RSpec.describe 'переключение поведения конфигом' do
   # Строки боевого YAML, которые подменяются, и измеренные распределения.
   def strategy_line = 'strategy: count_share'
   def payflow_band = '  - { from: 500, to: 50000, prefer: payflow }'
+  # cascade.exhausted: last_candidate + on_timeout: stop (дефолты, эталон
+  # reference_decisions.json/`make validate`) -- op_103/op_104 (единственный
+  # кандидат quickpay отвечает таймаутом/отказом) остаются на quickpay,
+  # spacepayments в дефолтном каскаде не подключается. Все четыре
+  # распределения перемерены под текущие дефолты каскада, а не подогнаны на
+  # глаз.
   def count_share_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
-  def load_split = { 'payflow' => 1, 'quickpay' => 9 }
-  def band_payflow_split = { 'vipay' => 3, 'payflow' => 3, 'quickpay' => 4 }
+  def load_split = { 'quickpay' => 7, 'vipay' => 1, 'payflow' => 2 }
+  def band_payflow_split = { 'payflow' => 3, 'vipay' => 3, 'quickpay' => 4 }
   def band_vipay_split = { 'vipay' => 4, 'payflow' => 3, 'quickpay' => 3 }
 
   let(:bin_route) { File.expand_path('../../bin/route', __dir__) }
@@ -83,12 +89,11 @@ RSpec.describe 'переключение поведения конфигом' do
       end
     end
 
-    it 'strategy: load даёт 0/1/9 — распределение изменила одна строка YAML' do
+    it 'strategy: load даёт 7/1/2 — распределение изменила одна строка YAML' do
       Dir.mktmpdir do |tmp|
         decisions = decisions_for(tmp, { strategy_line => 'strategy: load' })
 
         expect(split(decisions)).to eq(load_split)
-        expect(split(decisions)['vipay']).to eq(0)
       end
     end
   end

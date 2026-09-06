@@ -269,28 +269,85 @@ RSpec.describe Execution::Executor do
     end
   end
 
-  describe 'on_timeout: :continue — все последующие rejected → selected = таймаут-провайдер' do
+  # exhausted и on_timeout ортогональны: on_timeout решает, идти ли дальше
+  # сразу после таймаута, exhausted -- что делать, когда каскад в итоге дошёл
+  # до конца без approved. Таймаут по дороге НЕ отключает exhausted -- это
+  # исправленное поведение (было: таймаут-провайдер побеждал безусловно).
+  describe 'on_timeout: :continue + exhausted: :fallback_provider — ' \
+           'смешанный каскад (expired, потом rejected) доезжает до fallback' do
     let(:executor) do
       described_class.new(
         outcomes: script_source(
-          'op_1' => { 'vipay' => :expired, 'payflow' => :rejected, 'quickpay' => :rejected }
+          'op_1' => { 'vipay' => :expired, 'payflow' => :rejected, 'spacepayments' => :approved }
         ),
         on_timeout: :continue,
-        # exhausted намеренно fallback_provider: правило exhausted не обязано
-        # применяться, когда каскад закончился condicional-успешным таймаутом,
-        # а не полным отказом -- эта комбинация проверяет именно приоритет.
         exhausted: :fallback_provider
       )
     end
     let(:plan) do
-      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow, quickpay],
-                             skipped: [])
+      Routing::RoutePlan.new(operation: operation, candidates: [vipay, payflow], skipped: [])
     end
 
-    it 'selected = первый таймаут-провайдер, result expired, exhausted не применяется' do
+    it 'vipay остаётся в attempts с result expired, spacepayments — следующей попыткой' do
+      expect(outcome.result).to eq(:approved)
+      expect(outcome.selected.name).to eq('spacepayments')
+      expect(outcome.attempts.map { |a| [a.provider.name, a.result] })
+        .to eq([%w[vipay expired], %w[payflow rejected], %w[spacepayments approved]])
+      expect(outcome.attempts.last.reason).to eq('fallback_after_cascade')
+      expect(outcome.attempts.last.attempt_no).to eq(3)
+
+      # vipay остаётся held -- операция в целом approved (через fallback), но
+      # статус-чек по таймауту всё равно нужен.
+      expect { state_after.resolve_hold(vipay, operation, :rejected) }.not_to raise_error
+    end
+
+    it_behaves_like 'state invariants'
+  end
+
+  describe 'on_timeout: :continue + exhausted: :fallback_provider — ' \
+           'единственный кандидат expired доезжает до fallback' do
+    let(:executor) do
+      described_class.new(
+        outcomes: script_source('op_1' => { 'quickpay' => :expired, 'spacepayments' => :approved }),
+        on_timeout: :continue,
+        exhausted: :fallback_provider
+      )
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [quickpay], skipped: [])
+    end
+
+    it 'quickpay остаётся в attempts с result expired, spacepayments — следующей попыткой' do
+      expect(outcome.result).to eq(:approved)
+      expect(outcome.selected.name).to eq('spacepayments')
+      expect(outcome.attempts.map { |a| [a.provider.name, a.result] })
+        .to eq([%w[quickpay expired], %w[spacepayments approved]])
+      expect(outcome.attempts.last.reason).to eq('fallback_after_cascade')
+      expect(outcome.attempts.last.attempt_no).to eq(2)
+
+      expect { state_after.resolve_hold(quickpay, operation, :rejected) }.not_to raise_error
+    end
+
+    it_behaves_like 'state invariants'
+  end
+
+  describe 'on_timeout: :stop + exhausted: :fallback_provider — ' \
+           'единственный кандидат expired обрывает каскад без fallback' do
+    let(:executor) do
+      described_class.new(
+        outcomes: script_source('op_1' => { 'quickpay' => :expired }),
+        on_timeout: :stop,
+        exhausted: :fallback_provider
+      )
+    end
+    let(:plan) do
+      Routing::RoutePlan.new(operation: operation, candidates: [quickpay], skipped: [])
+    end
+
+    it 'осторожный режим остаётся рабочим: selected = quickpay, result expired' do
       expect(outcome.result).to eq(:expired)
-      expect(outcome.selected.name).to eq('vipay')
-      expect(outcome.attempts.size).to eq(3)
+      expect(outcome.selected.name).to eq('quickpay')
+      expect(outcome.attempts.size).to eq(1)
       expect(outcome.attempts.map { |a| a.provider.name }).not_to include('spacepayments')
     end
 

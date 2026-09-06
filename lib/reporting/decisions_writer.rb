@@ -23,10 +23,38 @@ module Reporting
       pairs.map { |operation, outcome| build_decision(operation, outcome) }
     end
 
-    # Правило воспроизводимости: File.write, а не File.open+puts, и один
-    # завершающий перевод строки — иначе make determinism будет мигать.
+    # Правило воспроизводимости: один завершающий перевод строки, никаких
+    # лишних — иначе make determinism будет мигать.
+    #
+    # Пишем потоком, а не JSON.pretty_generate(build(pairs)) целиком: на
+    # очереди в миллион операций материализация решений и сборка
+    # гигабайтной строки перед записью — главный источник пикового расхода
+    # памяти CLI (см. пакет 3). Каждое решение сериализуется отдельным
+    # вызовом JSON.pretty_generate и вклеивается в общий массив с отступом
+    # в два пробела — ровно так JSON.pretty_generate индентирует элемент
+    # массива на первом уровне вложенности, поэтому байт в байт
+    # неотличимо от прежнего JSON.pretty_generate(build(pairs)).
     def self.write(path, pairs)
-      File.write(path, "#{JSON.pretty_generate(build(pairs))}\n")
+      File.open(path, 'w') do |file|
+        next file.write("[]\n") if pairs.empty?
+
+        write_elements(file, pairs)
+      end
     end
+
+    def self.write_elements(file, pairs)
+      file.write('[')
+      pairs.each_with_index do |(operation, outcome), index|
+        file.write(index.zero? ? "\n" : ",\n")
+        file.write(indented_decision(build_decision(operation, outcome)))
+      end
+      file.write("\n]\n")
+    end
+    private_class_method :write_elements
+
+    def self.indented_decision(decision)
+      JSON.pretty_generate(decision).each_line.map { |line| "  #{line}" }.join
+    end
+    private_class_method :indented_decision
   end
 end
