@@ -6,10 +6,10 @@ require_relative '../io/providers_loader'
 
 module Api
   # Ручная валидация payload'ов. Опирается на существующие лоадеры ядра
-  # (Io::QueueLoader::Builder для операций, Io::ProvidersLoader для провайдеров)
+  # (Io::QueueRecord для операций, Io::ProvidersLoader для провайдеров)
   # — не дублируем правила, только маппим их в API-формат ошибок.
   module Validators
-    OPERATION_REQUIRED = Io::QueueLoader::REQUIRED_FIELDS
+    OPERATION_REQUIRED = Io::QueueRecord::REQUIRED_FIELDS
 
     SNAPSHOT_REQUIRED = %w[gateway merchant providers].freeze
     CONFIG_REQUIRED = %w[strategy outcomes fallback_provider].freeze

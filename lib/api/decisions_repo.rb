@@ -112,6 +112,42 @@ module Api
       rows.map { |row| decision_hash(row, attempts_by_id[row['id']] || []) }
     end
 
+    # Решения с контекстом операции: те же поля, что в /decisions, плюс id,
+    # время, сумма, банк, мерчант и гейт. Отдельный метод, а не расширение
+    # decision_hash: форма /decisions зафиксирована как элемент
+    # routing_decisions_test.json и обрастать полями не должна.
+    def list_with_context(filter: {}, limit: 100, offset: 0)
+      where, params = build_where(filter)
+      rows = @db.execute(
+        "SELECT * FROM decisions #{where} ORDER BY id ASC LIMIT ? OFFSET ?",
+        params + [limit, offset]
+      )
+      attempts_by_id = load_attempts(rows.map { |r| r['id'] })
+      rows.map { |row| context_decision_hash(row, attempts_by_id[row['id']] || []) }
+    end
+
+    # Плоские строки для агрегатов консоли. Отдаём только то, из чего считается
+    # сводка, — гонять сюда attempts и details незачем.
+    def analytics_decisions(filter = {})
+      where, params = build_where(filter)
+      @db.execute(
+        "SELECT id, created_at, amount, selected_provider, simulated_result, latency_sec
+           FROM decisions #{where} ORDER BY id ASC", params
+      )
+    end
+
+    def analytics_attempts(filter = {})
+      # Колонки фильтра (merchant_id, gate, selected_provider, created_at)
+      # есть только в decisions, поэтому WHERE из build_where подставляется
+      # в JOIN без префиксов и без двусмысленности.
+      where, params = build_where(filter)
+      @db.execute(
+        "SELECT a.decision_id, a.provider, a.decision, d.created_at
+           FROM attempts a JOIN decisions d ON d.id = a.decision_id
+           #{where} ORDER BY a.decision_id ASC, a.attempt_no ASC", params
+      )
+    end
+
     def fetch_all_for_report(filter: {})
       where, params = build_where(filter)
       rows = @db.execute(
@@ -170,6 +206,18 @@ module Api
         'simulated_result' => row['simulated_result'],
         'latency_sec' => row['latency_sec']
       }
+    end
+
+    def context_decision_hash(row, attempts)
+      decision_hash(row, attempts).merge(
+        'id' => row['id'],
+        'created_at' => Time.at(row['created_at']).utc.iso8601,
+        'amount' => row['amount'],
+        'bank' => row['bank'],
+        'card_brand' => row['card_brand'],
+        'merchant' => row['merchant_id'],
+        'gate' => row['gate']
+      )
     end
 
     def attempt_hash(row)

@@ -289,12 +289,33 @@ make bench-configs LEVEL=compare_m     # на 100 000 заявок
 Минимальный HTTP-слой поверх того же ядра: потоковая обработка, общее in-memory
 состояние провайдеров, аналитика из SQLite. CLI остаётся главной точкой входа.
 
-Контракт — `docs/openapi.yaml` (OpenAPI 3.0.3, 12 путей, 23 схемы). Посмотреть
+Контракт — `docs/openapi.yaml` (OpenAPI 3.0.3, 16 путей, 30 схем). Посмотреть
 без запуска сервера:
 
 ```bash
 xdg-open public/swagger/index.html
 ```
+
+К сервису прикручен пульт — консоль на чистых HTML/CSS/JS (`dashboard/`,
+раздаётся из `bin/serve` по <http://localhost:4567/console/>): доли против
+целей, симулятор операций, аналитика с фильтрами и карта ручек. Своих данных
+консоль не держит — всё приходит из тех же ручек, что и у любого клиента.
+Подробности — `dashboard/README.md`.
+
+<table>
+<tr>
+<td width="50%"><img src="docs/img/overview.png" alt="Обзор"><br><sub>Обзор — доли факт/цель, лимиты, каскад попыток</sub></td>
+<td width="50%"><img src="docs/img/simulator.png" alt="Симулятор"><br><sub>Симулятор — прогон операции с разбором каждой попытки</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/img/analytics.png" alt="Аналитика"><br><sub>Аналитика — фильтры, разрез по провайдерам, сырые решения</sub></td>
+<td width="50%"><img src="docs/img/context.png" alt="Контекст"><br><sub>Контекст — конфиг, слои, снапшот, здоровье</sub></td>
+</tr>
+</table>
+
+Кнопка «Скачать HTML-отчёт» в «Аналитике» экспортирует текущую выборку одним файлом:
+
+<img src="docs/img/report-export.png" alt="Экспортированный HTML-отчёт" width="50%">
 
 Ядро (`lib/routing`, `lib/execution`, `lib/state`) в HTTP-слое не меняется ни на
 строку.

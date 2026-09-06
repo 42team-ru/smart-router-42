@@ -7,7 +7,8 @@ module Config
   # Настройки HTTP-сервиса (порт, SQLite, retention). Отдельно от
   # RoutingConfig: domain vs operational. Читает bin/serve на старте.
   ServiceConfig = Data.define(
-    :port, :db_path, :retention_hours, :swagger_path, :openapi_path, :history_path
+    :port, :db_path, :retention_hours, :swagger_path, :openapi_path, :history_path,
+    :dashboard_path
   ) do
     def retention_seconds
       retention_hours * 3600
@@ -21,7 +22,8 @@ module Config
       'retention_hours' => 24,
       'swagger_path' => './public/swagger',
       'openapi_path' => './docs/openapi.yaml',
-      'history_path' => './reference/data/operations_history.csv'
+      'history_path' => './reference/data/operations_history.csv',
+      'dashboard_path' => './dashboard'
     }.freeze
 
     def self.load(path)
@@ -38,7 +40,8 @@ module Config
         retention_hours: Integer(merged.fetch('retention_hours')),
         swagger_path: merged.fetch('swagger_path'),
         openapi_path: merged.fetch('openapi_path'),
-        history_path: merged.fetch('history_path')
+        history_path: merged.fetch('history_path'),
+        dashboard_path: merged.fetch('dashboard_path')
       )
     end
 

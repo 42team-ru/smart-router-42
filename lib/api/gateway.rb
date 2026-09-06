@@ -3,6 +3,7 @@
 require_relative 'errors'
 require_relative 'serializers'
 require_relative 'stream_report_builder'
+require_relative 'analytics_builder'
 require_relative 'validators'
 require_relative 'attempt_explainer'
 require_relative '../io/providers_loader'
@@ -140,6 +141,38 @@ module Api
         'limit' => limit,
         'offset' => offset,
         'next_offset' => next_offset
+      }
+    end
+
+    def analytics_overview(filter: {}, buckets: AnalyticsBuilder::DEFAULT_BUCKETS)
+      require_snapshot!
+      AnalyticsBuilder.overview(repo: @repo, filter: filter, buckets: buckets)
+    end
+
+    def analytics_decisions(filter: {}, limit: 100, offset: 0)
+      require_snapshot!
+      total = @repo.count(filter)
+      items = @repo.list_with_context(filter: filter, limit: limit, offset: offset)
+      next_offset = offset + items.size
+      next_offset = nil if next_offset >= total
+      {
+        'items' => items,
+        'total' => total,
+        'limit' => limit,
+        'offset' => offset,
+        'next_offset' => next_offset
+      }
+    end
+
+    # Что вообще можно поставить в config.strategy и config.layers. Реестры
+    # знают это сами, поэтому список нигде не дублируется: положили файл в
+    # lib/routing/strategies — он появился в выдаче и в селекторе консоли.
+    def capabilities
+      {
+        'strategies' => Routing::Strategies.known,
+        'layers' => Routing::Layers.known,
+        'fallback_provider' => @routing_config.fallback_provider,
+        'retention_hours' => @service_config.retention_hours
       }
     end
 

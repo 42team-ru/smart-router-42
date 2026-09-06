@@ -10,14 +10,24 @@ require_relative 'validators'
 module Api
   # Sinatra-приложение — тонкая обёртка над Gateway. Тут только: разбор JSON,
   # маппинг ошибок в HTTP-статусы (из docs/openapi.yaml), статика swagger и
-  # выдача openapi.yaml. Никакой доменной логики.
-  # rubocop:disable-next Metrics/ClassLength -- 12 путей + error-hook, дробить только через новый Rack-mount.
+  # консоли (dashboard/), выдача openapi.yaml. Никакой доменной логики.
+  # rubocop:disable-next Metrics/ClassLength -- 18 путей + error-hook, дробить только через новый Rack-mount.
   class App < Sinatra::Base
     set :logging, false
     set :show_exceptions, false
     set :raise_errors, false
     set :dump_errors, false
     set :protection, false
+
+    # Статика консоли (dashboard/) раздаётся вручную, а не public_folder:
+    # public_folder уже занят Swagger UI, а второй Rack::Static ради четырёх
+    # файлов дороже, чем эта таблица.
+    DASHBOARD_MIME = {
+      '.html' => 'text/html', '.css' => 'text/css',
+      '.js' => 'application/javascript', '.json' => 'application/json',
+      '.svg' => 'image/svg+xml', '.png' => 'image/png',
+      '.ico' => 'image/x-icon', '.woff2' => 'font/woff2'
+    }.freeze
 
     class << self
       attr_accessor :gateway_instance, :service_settings
@@ -47,6 +57,17 @@ module Api
         content_type :json
         status status_code
         JSON.generate(payload)
+      end
+
+      # Путь склеивается из splat, поэтому проверяем, что итог остался внутри
+      # каталога консоли: ../../etc/passwd не должен уехать за пределы root.
+      def dashboard_file(relative)
+        root = File.expand_path(service_settings.dashboard_path)
+        path = File.expand_path(File.join(root, relative))
+        halt 404, 'Dashboard file not found' unless path.start_with?("#{root}/") && File.file?(path)
+
+        content_type DASHBOARD_MIME.fetch(File.extname(path), 'application/octet-stream')
+        File.read(path)
       end
 
       def report_filter
@@ -157,10 +178,27 @@ module Api
       json_response(gateway.state_snapshot)
     end
 
+    get '/analytics/overview' do
+      buckets = int_param('buckets', default: AnalyticsBuilder::DEFAULT_BUCKETS, min: 2, max: 96)
+      json_response(gateway.analytics_overview(filter: report_filter, buckets: buckets))
+    end
+
+    get '/analytics/decisions' do
+      limit = int_param('limit', default: 100, min: 1, max: 500)
+      offset = int_param('offset', default: 0, min: 0)
+      json_response(gateway.analytics_decisions(
+                      filter: report_filter, limit: limit, offset: offset
+                    ))
+    end
+
     # ---------- Infrastructure ----------
 
     get '/health' do
       json_response(gateway.health)
+    end
+
+    get '/capabilities' do
+      json_response(gateway.capabilities)
     end
 
     get '/openapi.yaml' do
@@ -169,6 +207,18 @@ module Api
 
       content_type 'application/yaml'
       File.read(path)
+    end
+
+    get '/console' do
+      redirect '/console/'
+    end
+
+    get '/console/' do
+      dashboard_file('index.html')
+    end
+
+    get '/console/*' do
+      dashboard_file(params['splat'].first)
     end
 
     get '/swagger' do

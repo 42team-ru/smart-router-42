@@ -12,3 +12,4 @@ service:
   swagger_path: "./public/swagger"
   openapi_path: "./docs/openapi.yaml"
   history_path: "./reference/data/operations_history.csv"
+  dashboard_path: "./dashboard"

@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="ru" data-rc-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Routing Console — smart-routing-42</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:wght@400;600;700&family=Source+Code+Pro:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/console.css">
+</head>
+<body>
+
+<div class="rc-app">
+
+  <header class="rc-top">
+    <div class="rc-brand">
+      <div class="rc-logo"></div>
+      <div class="rc-brand-name">Routing Console</div>
+    </div>
+    <div class="rc-vr"></div>
+    <div class="rc-chips">
+      <div class="rc-chip"><span class="rc-chip-k">gate</span><span id="hGate">—</span></div>
+      <div class="rc-chip"><span class="rc-chip-k">merchant</span><span id="hMerchant">—</span></div>
+      <div class="rc-chip-strategy"><span class="dot"></span><span id="hStrategy">—</span></div>
+    </div>
+    <div class="spacer"></div>
+    <div class="rc-health" id="hPill">
+      <span class="dot"></span>
+      <span id="hSnapshot">—</span><span class="sep">·</span>
+      <span class="mono"><span id="hDecisions">0</span> decisions</span><span class="sep">·</span>
+      <span class="mono">v<span id="hVersion">—</span></span>
+    </div>
+    <button class="btn" id="btnRefresh" type="button">Обновить</button>
+    <button class="btn" id="btnTheme" type="button">Тёмная тема</button>
+  </header>
+
+  <div class="rc-body">
+
+    <aside class="rc-side">
+      <div class="rc-side-title">Движок</div>
+      <nav class="rc-nav" id="nav"></nav>
+      <div class="rc-sep"></div>
+      <div class="rc-side-block">
+        <div class="rc-side-head">Риск залипания</div>
+        <div class="rc-risks" id="risks"></div>
+      </div>
+    </aside>
+
+    <main class="rc-main">
+
+      <!-- Заглушка: сервис не отвечает или снапшот не загружен -->
+      <section class="rc-gate" id="gate" hidden>
+        <div class="gate-card">
+          <div class="gate-title" id="gateTitle"></div>
+          <div class="gate-text pretty" id="gateText"></div>
+          <pre class="gate-code" id="gateCode" hidden></pre>
+          <button class="btn-primary" id="gateRetry" type="button">Повторить</button>
+        </div>
+      </section>
+
+      <!-- ================= Обзор ================= -->
+      <section class="rc-page" data-page="overview" hidden>
+        <div class="rc-page-head">
+          <div>
+            <h1 class="rc-h1">Куда уходит трафик</h1>
+            <div class="rc-sub">Счётчики из <span class="mono">GET /state</span> на <span id="nowLabel">—</span> · цели по трафику из <span class="mono">GET /snapshot</span></div>
+          </div>
+          <button class="btn-primary" id="btnGoSim" type="button">Прогнать операцию</button>
+        </div>
+
+        <div class="tiles" id="tiles"></div>
+
+        <div class="cols">
+          <div class="col-main">
+
+            <div class="card card-pad">
+              <div class="card-head" style="border-bottom:none;padding:0 0 14px">
+                <div>
+                  <div class="card-title">Распределение решений по провайдерам</div>
+                  <div class="card-note" id="stackNote">GET /analytics/overview · selected_provider</div>
+                </div>
+                <div class="spacer"></div>
+                <div class="legend" data-legend></div>
+              </div>
+              <div class="chart-wrap" style="height:200px">
+                <canvas id="chartStack"></canvas>
+              </div>
+            </div>
+
+            <div class="card card-clip">
+              <div class="card-head" style="justify-content:space-between">
+                <div class="card-title">Провайдеры</div>
+                <div class="card-note">факт — /state, цель — /snapshot</div>
+              </div>
+              <div class="tscroll">
+                <div class="thead g-prov">
+                  <div>Провайдер</div><div>Доля факт / цель</div><div>В работе</div>
+                  <div>Дневной объём</div><div>Пульс</div>
+                  <div class="ta-r">Approve</div><div class="ta-r">Latency</div>
+                </div>
+                <div id="provRows"></div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="col-side">
+            <div class="card" style="padding:15px 16px">
+              <div class="card-title" style="margin-bottom:12px">Исходы</div>
+              <div class="donut-wrap">
+                <div class="donut-canvas-wrap">
+                  <canvas id="donutChart" width="104" height="104"></canvas>
+                  <div class="donut-center">
+                    <div class="pct" id="donutPct">—</div>
+                    <div class="lbl">approved</div>
+                  </div>
+                </div>
+                <div class="outcomes" id="outcomes"></div>
+              </div>
+            </div>
+
+            <div class="card" style="padding:14px 16px">
+              <div class="card-title" style="margin-bottom:3px">Каскад попыток</div>
+              <div class="card-note" style="margin-bottom:13px">attempt_histogram — сколько решений дошло до попытки N</div>
+              <div class="cascade" id="cascade"></div>
+            </div>
+
+            <div class="card" id="skipCard" style="padding:14px 16px" hidden>
+              <div class="card-title" style="margin-bottom:3px">Причины отсева</div>
+              <div class="card-note" style="margin-bottom:13px">skip_reasons по всем попыткам выборки</div>
+              <div class="kv-list" id="skipRows"></div>
+            </div>
+
+            <div class="note-acc" id="recCard" hidden>
+              <div class="t">Рекомендации движка</div>
+              <div class="b"><ul class="rec-list" id="recRows"></ul></div>
+            </div>
+
+            <div class="note-acc">
+              <div class="t">Почему карточки строятся из /state</div>
+              <div class="b"><span class="mono">GET /snapshot</span> отдаёт провайдеров такими, какими их загрузили — без накопленных мутаций счётчиков. Живые <span class="mono">in_progress_*</span> и <span class="mono">daily_approved_amount</span> есть только в <span class="mono">/state</span>. Снапшот здесь нужен единственно для целевых <span class="mono">traffic_percentage</span> — это чёрные риски на полосках доли.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Симулятор ================= -->
+      <section class="rc-page" data-page="sim" hidden>
+        <div style="margin-bottom:18px">
+          <h1 class="rc-h1">Симулятор операций</h1>
+          <div class="rc-sub">Planner + Executor через <span class="mono">POST /operations</span>. Резервирует capacity, коммитит или откатывает по исходу.</div>
+        </div>
+
+        <div class="sim-grid">
+          <div class="stack">
+            <div class="card" style="padding:16px">
+              <div class="seg" id="modeSeg">
+                <button type="button" data-act="mode" data-id="single">Одна операция</button>
+                <button type="button" data-act="mode" data-id="batch">Батч</button>
+              </div>
+
+              <div class="form-col" id="simSingle">
+                <label class="field">
+                  <span class="field-label">amount <span class="hint">integer ≥ 1</span></span>
+                  <input class="input" id="fAmount" inputmode="numeric" autocomplete="off">
+                </label>
+                <div class="form-2">
+                  <label class="field">
+                    <span class="field-label">bank</span>
+                    <input class="input" id="fBank" list="bankList" autocomplete="off">
+                    <datalist id="bankList"></datalist>
+                  </label>
+                  <label class="field">
+                    <span class="field-label">card_brand <span class="hint">опц.</span></span>
+                    <input class="input" id="fBrand" autocomplete="off" placeholder="null">
+                  </label>
+                </div>
+                <div class="form-2">
+                  <label class="field">
+                    <span class="field-label">sbp.phone</span>
+                    <input class="input" id="fPhone" autocomplete="off">
+                  </label>
+                  <label class="field">
+                    <span class="field-label">sbp.bank_name</span>
+                    <input class="input" id="fBankName" autocomplete="off">
+                  </label>
+                </div>
+                <div class="field">
+                  <div class="field-label">operation_id</div>
+                  <div class="readonly"><span id="nextOpId">—</span><span class="tail">генерируется</span></div>
+                </div>
+              </div>
+
+              <div id="simBatch" hidden>
+                <div class="field-label">operations[] <span class="hint">минимум 1</span></div>
+                <textarea class="textarea" id="fBatch" rows="14" spellcheck="false"></textarea>
+                <div class="warnbox">
+                  <span class="dot"></span>
+                  <span class="pretty">Батч не транзакционен: применённые операции остаются, даже если следующая упадёт. При ошибке смотрите <span class="mono">details.failed_index</span>.</span>
+                </div>
+              </div>
+
+              <button class="btn-run" id="btnRun" type="button">POST /operations</button>
+            </div>
+
+            <div class="card card-clip">
+              <div class="runs-title">Последние прогоны</div>
+              <div class="empty-slot" id="runsEmpty">Пока пусто — прогоните операцию.</div>
+              <div id="runsList"></div>
+            </div>
+          </div>
+
+          <div class="stack">
+            <div class="card card-clip" id="resCard" hidden>
+              <div class="res-head">
+                <div class="pill" id="resPill"><span class="dot"></span><span class="mono" id="resResult"></span></div>
+                <div class="kv-inline"><span class="k">selected_provider</span><span class="v" id="resProvider"></span></div>
+                <div class="spacer"></div>
+                <div class="res-stats">
+                  <div><div class="k">latency_sec</div><div class="v" id="resLatency"></div></div>
+                  <div><div class="k">попыток</div><div class="v" id="resAttempts"></div></div>
+                  <div><div class="k">HTTP</div><div class="v" style="color:var(--pos)">200</div></div>
+                </div>
+              </div>
+              <div class="res-body">
+                <div class="meta-chips" id="resMeta"></div>
+                <div class="block-title">Каскад попыток</div>
+                <div id="resCascade"></div>
+              </div>
+            </div>
+
+            <div class="placeholder" id="resEmpty">
+              <div class="icon"></div>
+              <div class="t">Решение появится здесь</div>
+              <div class="b">Заполните операцию слева. Ответ 200 приходит и при <span class="mono">rejected</span>, и при <span class="mono">expired</span>, и при <span class="mono">no_provider</span> — пульт ловит неуспех по <span class="mono">simulated_result</span>, а не по HTTP-коду.</div>
+            </div>
+
+            <div class="card card-clip" id="batchCard" hidden>
+              <div class="card-head">
+                <div class="card-title" style="font-size:14px">Результат батча</div>
+                <div class="mono" style="font-size:12px;color:var(--g700)">processed <span id="batchProcessed">0</span></div>
+                <div class="mono" style="font-size:12px" id="batchFail"></div>
+              </div>
+              <div class="thead g-batch">
+                <div>#</div><div>provider</div><div>result</div>
+                <div class="ta-r">amount</div><div class="ta-r">latency</div>
+              </div>
+              <div id="batchRows"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Аналитика ================= -->
+      <section class="rc-page" data-page="decisions" hidden>
+        <div class="rc-page-head">
+          <div>
+            <h1 class="rc-h1">Аналитика</h1>
+            <div class="rc-sub">Пять общих фильтров применяются как WHERE до агрегации — одинаково к <span class="mono">/report</span>, <span class="mono">/analytics/*</span> и <span class="mono">/decisions</span>.</div>
+          </div>
+          <button class="btn-primary" id="btnExportReport" type="button">Скачать HTML-отчёт</button>
+        </div>
+
+        <div class="card" style="padding:14px 16px;margin-bottom:16px">
+          <div class="filters">
+            <label class="field">
+              <span class="field-label">since <span class="hint">вкл.</span></span>
+              <input class="input" type="datetime-local" id="fSince">
+            </label>
+            <label class="field">
+              <span class="field-label">until <span class="hint">искл.</span></span>
+              <input class="input" type="datetime-local" id="fUntil">
+            </label>
+            <label class="field">
+              <span class="field-label">merchant</span>
+              <select class="select" id="fMerchant"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">gate</span>
+              <select class="select" id="fGate"></select>
+            </label>
+            <label class="field">
+              <span class="field-label">provider</span>
+              <select class="select" id="fProvider"></select>
+            </label>
+            <div style="display:flex;gap:8px">
+              <button class="btn" style="height:32px" id="btnClearFilters" type="button">Сбросить</button>
+            </div>
+          </div>
+          <div class="warnbox" id="providerWarn" style="margin-top:12px;padding:10px 12px" hidden>
+            <span class="dot"></span>
+            <span class="pretty">Фильтр <span class="mono">provider</span> бьёт по итоговому <span class="mono">selected_provider</span>, а не по попыткам — в отчёте он схлопывает <span class="mono">attempt_distribution</span> до одного провайдера. Для анализа каскада снимите его.</span>
+          </div>
+        </div>
+
+        <div class="tiles tiles-sm" id="repTiles"></div>
+
+        <div class="card card-pad" style="margin-bottom:16px">
+          <div class="card-head" style="border-bottom:none;padding:0 0 14px">
+            <div>
+              <div class="card-title">Approve rate по провайдерам</div>
+              <div class="card-note" id="rateNote">approved_by_provider / by_provider по корзинам</div>
+            </div>
+            <div class="spacer"></div>
+            <div class="legend" data-legend></div>
+          </div>
+          <div class="chart-wrap" style="height:190px">
+            <canvas id="chartRate"></canvas>
+          </div>
+        </div>
+
+        <div class="card card-clip" style="margin-bottom:16px">
+          <div class="card-head" style="justify-content:space-between">
+            <div class="card-title">Разрез по провайдерам</div>
+            <div class="card-note-mono">GET /report</div>
+          </div>
+          <div class="tscroll">
+            <div class="thead g-rep">
+              <div>Провайдер</div><div class="ta-r">Решений</div><div class="ta-r">Доля / цель</div>
+              <div style="padding-left:6px">Наблюдаемая конверсия</div><div class="ta-r">Объём</div><div class="ta-r">Откл.</div>
+            </div>
+            <div id="repRows"></div>
+          </div>
+        </div>
+
+        <div class="card card-clip">
+          <div class="card-head">
+            <div class="card-title">Сырые решения</div>
+            <div class="card-note-mono">GET /analytics/decisions · id ASC</div>
+            <div class="spacer"></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:12px;color:var(--g700)">limit</span>
+              <select class="select mono" id="fLimit" style="width:auto;height:28px;font-size:12px"></select>
+            </div>
+          </div>
+          <div class="tscroll">
+            <div class="thead g-dec">
+              <div>id</div><div>time</div><div>operation_id</div>
+              <div class="ta-r" style="padding-right:12px">amount</div><div>bank</div>
+              <div>provider</div><div>result</div>
+              <div class="ta-r">latency</div><div class="ta-r">attempts</div>
+            </div>
+            <div class="tempty" id="decEmpty" hidden>Пустая выборка — фильтры не дали строк. Это не ошибка: <span class="mono">/report</span> вернёт пустой отчёт, а не 4xx.</div>
+            <div id="decRows"></div>
+          </div>
+          <div class="pager">
+            <div class="l" id="pageLabel">0 из 0</div>
+            <div class="spacer"></div>
+            <div class="n">next_offset <span id="nextOffset">null</span></div>
+            <button class="btn btn-sm" id="btnPrev" type="button">Назад</button>
+            <button class="btn btn-sm" id="btnNext" type="button">Вперёд</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= Контекст ================= -->
+      <section class="rc-page" data-page="context" hidden>
+        <div style="margin-bottom:18px">
+          <h1 class="rc-h1">Контекст движка</h1>
+          <div class="rc-sub">Снапшот, конфиг и опасные ручки. Всё, кроме <span class="mono">GET</span>, сбрасывает <span class="mono">state</span> и <span class="mono">decisions</span>.</div>
+        </div>
+
+        <div class="cols">
+          <div class="col-main">
+
+            <div class="card" style="padding:16px 18px">
+              <div class="card-head" style="border-bottom:none;padding:0 0 15px;gap:12px">
+                <div class="card-title">Активный конфиг</div>
+                <div class="card-note-mono">GET /config · POST /config</div>
+              </div>
+              <div class="cfg-grid">
+                <label class="field">
+                  <span class="field-label">strategy</span>
+                  <select class="select mono" id="cStrategy" style="font-size:13px"></select>
+                </label>
+                <label class="field">
+                  <span class="field-label">outcomes.source</span>
+                  <select class="select mono" id="cSource" style="font-size:13px">
+                    <option value="deterministic">deterministic</option>
+                    <option value="always_ok">always_ok</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span class="field-label">outcomes.seed</span>
+                  <input class="input" id="cSeed" inputmode="numeric">
+                </label>
+                <label class="field">
+                  <span class="field-label">fallback_provider</span>
+                  <input class="input" id="cFallback" autocomplete="off">
+                </label>
+                <div class="field">
+                  <div class="field-label">retention_hours <span class="hint">service.yml</span></div>
+                  <div class="readonly"><span id="cRetention">—</span><span class="tail">только чтение</span></div>
+                </div>
+              </div>
+              <div class="field-label">layers <span class="hint">порядок применения Planner · из GET /capabilities</span></div>
+              <div class="chips-row" id="layerChips"></div>
+              <div class="cfg-actions">
+                <button class="btn-primary" style="height:34px;padding:0 16px" id="btnApplyConfig" type="button">Применить конфиг</button>
+                <button class="btn" style="height:34px;padding:0 14px" id="btnBootstrap" type="button">POST /bootstrap</button>
+                <button class="btn-danger" id="btnReset" type="button">POST /reset</button>
+                <div class="hint">После <span class="mono">/reset</span> конфиг и снапшот сохраняются — откатываются только счётчики.</div>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="col-side col-side-wide">
+            <div class="card" style="padding:15px 16px">
+              <div class="card-head" style="border-bottom:none;padding:0 0 12px;gap:10px">
+                <div class="card-title">Снапшот</div>
+                <div class="card-note-mono" style="font-size:11px">GET /snapshot</div>
+              </div>
+              <div class="kv-list" id="snapRows"></div>
+            </div>
+
+            <div class="card" style="padding:15px 16px">
+              <div class="card-head" style="border-bottom:none;padding:0 0 12px;gap:10px">
+                <div class="card-title">Здоровье</div>
+                <div class="card-note-mono" style="font-size:11px">GET /health</div>
+              </div>
+              <div class="kv-list" id="healthRows"></div>
+              <div class="links">
+                <a href="../openapi.yaml">/openapi.yaml</a>
+                <a href="../swagger/">/swagger</a>
+              </div>
+            </div>
+
+            <div class="note-plain">
+              <div class="t">Цели трафика</div>
+              <div class="targets" id="targets"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<div class="drawer-root" id="drawer" hidden>
+  <button class="drawer-scrim" id="drawerScrim" type="button" aria-label="Закрыть"></button>
+  <div class="drawer" role="dialog" aria-modal="true" aria-label="Решение">
+    <div class="drawer-head">
+      <div>
+        <div class="t">Решение #<span id="drId"></span></div>
+        <div class="s" id="drOpId"></div>
+      </div>
+      <div class="spacer"></div>
+      <button class="btn btn-icon" id="drPrev" type="button" aria-label="Предыдущее">&#8593;</button>
+      <button class="btn btn-icon" id="drNext" type="button" aria-label="Следующее">&#8595;</button>
+      <button class="btn btn-icon" id="drClose" type="button" aria-label="Закрыть">&#10005;</button>
+    </div>
+    <div class="drawer-body">
+      <div class="drawer-top">
+        <div class="pill" id="drPill"><span class="dot"></span><span class="mono" id="drResult"></span></div>
+        <div class="kv-inline"><span class="k">provider</span><span class="v" style="font-size:15px" id="drProvider"></span></div>
+        <div class="spacer"></div>
+        <div class="http-ok">HTTP 200</div>
+      </div>
+      <div class="drawer-meta" id="drMeta"></div>
+      <div class="block-title" style="margin-bottom:13px">Каскад попыток</div>
+      <div id="drCascade"></div>
+      <div class="json" id="drJson"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden>
+  <span class="dot" id="toastDot"></span>
+  <span id="toastText"></span>
+</div>
+
+<script src="assets/js/vendor/chart.umd.min.js"></script>
+<script src="assets/js/format.js"></script>
+<script src="assets/js/api.js"></script>
+<script src="assets/js/charts.js"></script>
+<script src="assets/js/report_export.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>

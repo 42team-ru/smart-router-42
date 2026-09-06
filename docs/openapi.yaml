@@ -386,6 +386,81 @@ paths:
               schema:
                 $ref: '#/components/schemas/DecisionsListResponse'
 
+  /analytics/overview:
+    get:
+      tags: [Analytics]
+      summary: Сводка исходов, длины каскада и временных рядов
+      description: |
+        То, чего нет в `/report`: гистограмма `simulated_result`, воронка длины
+        каскада и разбивка по корзинам времени. `/report` отвечает на вопрос
+        «куда ушёл трафик и почему» и ни одной отметки времени не содержит —
+        динамику по нему не построить.
+
+        Фильтры те же, что у `/report` и `/decisions`, и применяются так же —
+        как WHERE до агрегации. Пустая выборка возвращает нули и корзины без
+        отметок времени, а не 4xx.
+
+        Окно временных рядов определяется данными: `from` — самое раннее
+        решение выборки, `to` — самое позднее. Ширина корзины
+        (`bucket_seconds`) считается от окна, а не задаётся снаружи.
+      operationId: getAnalyticsOverview
+      parameters:
+        - $ref: '#/components/parameters/SinceParam'
+        - $ref: '#/components/parameters/UntilParam'
+        - $ref: '#/components/parameters/MerchantParam'
+        - $ref: '#/components/parameters/GateParam'
+        - $ref: '#/components/parameters/ProviderParam'
+        - name: buckets
+          in: query
+          description: Число корзин временного ряда (2..96, дефолт 12)
+          schema: { type: integer, minimum: 2, maximum: 96, default: 12 }
+      responses:
+        '200':
+          description: Сводка построена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnalyticsOverview'
+        '409':
+          $ref: '#/components/responses/NoSnapshot'
+
+  /analytics/decisions:
+    get:
+      tags: [Analytics]
+      summary: Решения вместе с контекстом операции
+      description: |
+        То же, что `GET /decisions`, плюс поля операции, по которым решение
+        принималось: `id`, `created_at`, `amount`, `bank`, `card_brand`,
+        `merchant`, `gate`.
+
+        Отдельный путь, а не расширение `/decisions`: форма элемента там
+        зафиксирована как `routing_decisions_test.json[i]` и обрастать полями
+        не должна.
+      operationId: listDecisionsWithContext
+      parameters:
+        - $ref: '#/components/parameters/SinceParam'
+        - $ref: '#/components/parameters/UntilParam'
+        - $ref: '#/components/parameters/MerchantParam'
+        - $ref: '#/components/parameters/GateParam'
+        - $ref: '#/components/parameters/ProviderParam'
+        - name: limit
+          in: query
+          description: Максимум элементов в ответе (1..500, дефолт 100)
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+        - name: offset
+          in: query
+          description: Смещение с начала выборки
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Список решений с контекстом
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContextDecisionsListResponse'
+        '409':
+          $ref: '#/components/responses/NoSnapshot'
+
   /state:
     get:
       tags: [Analytics]
@@ -429,6 +504,23 @@ paths:
                 strategy: count_share
                 version: "0.1.0"
 
+  /capabilities:
+    get:
+      tags: [Infrastructure]
+      summary: Допустимые значения для POST /config
+      description: |
+        Имена стратегий и слоёв берутся из реестров `Routing::Strategies` и
+        `Routing::Layers`, поэтому список нигде не дублируется: новый файл в
+        каталоге стратегий сразу виден здесь.
+      operationId: getCapabilities
+      responses:
+        '200':
+          description: Список возможностей
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Capabilities'
+
   /openapi.yaml:
     get:
       tags: [Infrastructure]
@@ -447,6 +539,22 @@ paths:
       summary: Swagger UI
       description: HTML-страница Swagger UI, читает `/openapi.yaml`. Раздаётся статикой из `public/swagger/`.
       operationId: getSwaggerUi
+      responses:
+        '200':
+          description: HTML
+          content:
+            text/html:
+              schema: { type: string }
+
+  /console/:
+    get:
+      tags: [Infrastructure]
+      summary: Routing Console
+      description: |
+        Пульт движка: обзор долей, симулятор операций, аналитика и контекст.
+        Статика из `dashboard/` (путь в `service.dashboard_path`), данные берёт
+        из этих же ручек — своего состояния у страницы нет.
+      operationId: getConsole
       responses:
         '200':
           description: HTML
@@ -858,6 +966,132 @@ components:
         limit:       { type: integer, example: 100 }
         offset:      { type: integer, example: 0 }
         next_offset: { type: integer, nullable: true, description: "offset для следующей страницы или null, если это последняя" }
+
+    AnalyticsOverview:
+      type: object
+      required: [total, outcomes, attempt_histogram, approved_count, approved_amount, timeline]
+      properties:
+        total:            { type: integer, minimum: 0, description: "Решений в выборке", example: 10 }
+        outcomes:
+          type: object
+          description: Счётчики `simulated_result`. Ключи присутствуют всегда, даже с нулями.
+          required: [approved, rejected, expired, no_provider]
+          additionalProperties: { type: integer, minimum: 0 }
+          example: { approved: 8, rejected: 1, expired: 0, no_provider: 1 }
+        attempt_histogram:
+          type: array
+          description: |
+            Воронка каскада: сколько решений дошло до попытки N. Первая строка
+            равна числу решений с хотя бы одной попыткой.
+          items: { $ref: '#/components/schemas/AttemptHistogramEntry' }
+        approved_count:   { type: integer, minimum: 0, example: 8 }
+        approved_amount:  { type: integer, minimum: 0, description: "Сумма amount по approved", example: 385800 }
+        avg_latency_sec:
+          type: number
+          nullable: true
+          description: "Средний latency_sec по approved; null, если approved нет"
+          example: 39.5
+        timeline:
+          $ref: '#/components/schemas/Timeline'
+
+    AttemptHistogramEntry:
+      type: object
+      required: [attempt_no, count]
+      properties:
+        attempt_no: { type: integer, minimum: 1, example: 2 }
+        count:      { type: integer, minimum: 0, example: 9 }
+
+    Timeline:
+      type: object
+      required: [from, to, bucket_seconds, buckets]
+      properties:
+        from:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Время самого раннего решения выборки; null на пустой выборке"
+          example: "2026-07-30T09:05:00Z"
+        to:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-07-30T09:50:00Z"
+        bucket_seconds:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: "Ширина корзины; null на пустой выборке"
+          example: 450
+        buckets:
+          type: array
+          items: { $ref: '#/components/schemas/TimelineBucket' }
+
+    TimelineBucket:
+      type: object
+      required: [at, total, by_provider, approved_by_provider, attempts_by_provider]
+      properties:
+        at:
+          type: string
+          format: date-time
+          nullable: true
+          description: "Левая граница корзины; null на пустой выборке"
+        total:                { type: integer, minimum: 0, example: 2 }
+        by_provider:
+          type: object
+          description: Решения корзины по итоговому `selected_provider`.
+          additionalProperties: { type: integer, minimum: 0 }
+          example: { vipay: 1, payflow: 1 }
+        approved_by_provider:
+          type: object
+          description: Из них с `simulated_result = approved` — числитель approve rate.
+          additionalProperties: { type: integer, minimum: 0 }
+          example: { vipay: 1, payflow: 1 }
+        attempts_by_provider:
+          type: object
+          description: Все попытки корзины, включая skipped, — пульс провайдера.
+          additionalProperties: { type: integer, minimum: 0 }
+          example: { vipay: 2, payflow: 1 }
+
+    ContextDecision:
+      allOf:
+        - $ref: '#/components/schemas/Decision'
+        - type: object
+          required: [id, created_at, amount, bank, merchant, gate]
+          properties:
+            id:         { type: integer, minimum: 1, description: "Порядковый id строки в SQLite", example: 1 }
+            created_at: { type: string, format: date-time, example: "2026-07-30T09:05:00Z" }
+            amount:     { type: integer, minimum: 1, example: 15000 }
+            bank:       { type: string, nullable: true, example: sberbank }
+            card_brand: { type: string, nullable: true, example: null }
+            merchant:   { type: string, example: alpha_market }
+            gate:       { type: string, example: RUB_SBP_WITHDRAW }
+
+    ContextDecisionsListResponse:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ContextDecision' }
+        total:       { type: integer, minimum: 0 }
+        limit:       { type: integer, example: 100 }
+        offset:      { type: integer, example: 0 }
+        next_offset: { type: integer, nullable: true }
+
+    Capabilities:
+      type: object
+      required: [strategies, layers]
+      properties:
+        strategies:
+          type: array
+          items: { type: string }
+          example: [amount_range, conversion, count_share, load, obligations, priority, round_robin, volume_share]
+        layers:
+          type: array
+          items: { type: string }
+          example: [budget_headroom, share_ceiling]
+        fallback_provider: { type: string, nullable: true, example: spacepayments }
+        retention_hours:   { type: integer, minimum: 1, example: 24 }
 
     ContextOkResponse:
       type: object
