@@ -5,11 +5,11 @@
 history_path: reference/data/operations_history.csv
 
 strategy: count_share
-layers: []
+layers: [share_ceiling, budget_headroom]
 
 goals:
   budget_headroom: { activates_at_spent_pct: 90 }
-  share_ceiling: { tolerance_bp: 0 }
+  share_ceiling: { tolerance_bp: 1000 }
 
 outcomes:
   source: always_ok # указание организаторов: на тестовой очереди всё approved
@@ -37,4 +37,4 @@ offline_analytics:
 comparison:
   - { name: round_robin,        strategy: round_robin, layers: [] }
   - { name: count_share,        strategy: count_share, layers: [] }
-  - { name: count_share+layers, strategy: count_share, layers: [budget_headroom, share_ceiling] }
+  - { name: count_share+layers, strategy: count_share, layers: [share_ceiling, budget_headroom] }
