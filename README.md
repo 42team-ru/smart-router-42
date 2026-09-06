@@ -8,7 +8,7 @@
 долей трафика, объясняет каждое решение числами и переходит к следующему
 кандидату при отказе.
 
-[![check](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml/badge.svg)](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml)
+[![check](https://github.com/42team-ru/smart-router-42-hackgenesis/actions/workflows/tests.yml/badge.svg)](https://github.com/42team-ru/smart-router-42/actions/workflows/tests.yml)
 ![Ruby 3.3](https://img.shields.io/badge/Ruby-3.3-CC342D?logo=ruby&logoColor=white)
 ![валидатор 29/29](https://img.shields.io/badge/валидатор-29%2F29-2ea44f)
 ![детерминизм](https://img.shields.io/badge/детерминизм-побайтовый-2ea44f)
